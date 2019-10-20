@@ -1,0 +1,483 @@
+---
+title: 'Analyses: Timing of Recruitment in Fire Refugia (unburned)'
+author: "Anna Talucci"
+date: "July 19, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Overview
+
+The purpose of this analysis is to determine when seedlings are establishing in unburned plots to see if there are any patterns in are specific increases in seedling establishment associated with mountain pine beetle outbreak. 
+
+Analysis is at the plot level. Saplings in each plot were surveyed for number of branch whorls as a proxy for age. The age of seedlings was used to calculate an establishment date. The establishment dates were used to split saplings into groups.
+
+The first analysis used 2 groups. Saplings were grouped as either established pre-outbreak (year of establishment <1999) or 
+post outbreak (year of establishment >= 1999). This increased our sample size to n=40. 
+
+The second analysis used 3 groups. Saplings were grouped as either established pre-outbreak (year of establishment <1999), during outbreak (year of establishment >= 1999 and <=2006), or post outbreak (year of establishment > 2006). This increased our sample size to n=60.
+
+The groupings created plots with repeated measures. Plots were replicates. Because of the repeated measures associated with the groupings mixed models were used for analysis with the plot as the random effect.
+
+# Packages
+
+The following Packages are required for the below analyses:
+
+```{r, message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(GGally)
+library(MASS)
+library(car)
+library(lme4)
+library(lsmeans)
+library(DHARMa)
+library(gmodels)
+library(grid)
+library(gridExtra)
+library(gtable)
+library(magick)
+```
+
+# Data
+
+```{r}
+whorl = read.csv("../data/chapter2_analysis2_unburnedsaplings_5december2017.csv", header=TRUE, sep = ",", strip.white = TRUE)
+
+head(whorl)
+```
+
+```{r}
+summary(whorl)
+```
+
+# Histograms
+
+Histogram of estimated year of establishment based on branch whorl
+
+```{r, echo=false, fig.height=3, fig.width=3}
+qplot(x = whorl$est.year, data = whorl, geom = "histogram")
+```
+
+The above histogram for establishment year are left skewed.
+
+
+```{r, echo=FALSE, fig.height=3, fig.width=3}
+qplot(x = whorl$whorl.leader, data = whorl, geom = "histogram")
+```
+
+The above histogram is right skewed for saplings age. This is just the reverse of the previous histogram.
+
+```{r, echo=FALSE, fig.height=3, fig.width=3}
+qplot(x = whorl$est.f.year, data = whorl, geom = "histogram")
+```
+
+```{r, echo=FALSE, fig.height=3, fig.width=3}
+qplot(x = whorl$false.whorls, data = whorl, geom = "histogram")
+```
+
+The above histogram is of false branch whorls. In some cases, PICO can put on an additional branch whorl in a growing season, referred to as a false branch whorl. It seems that large errors from false whorls are relatively small, and we had no means of confirming whether what we thought were false whorls were truly false whorls. We will acknowledge that this can happen, but we will not be taking any steps to change estimated age based on false whorls
+
+# Organization data
+
+Here we will organize our data into the plot level and then have sapling establishment years with counts that we can then use for analysis.
+
+```{r}
+whorl$plot.no = factor(whorl$plot.no)
+```
+
+```{r}
+summary(whorl)
+```
+
+## Seedling/sapling age range
+
+```{r}
+( whorl_age = whorl %>%
+  mutate(age = (2016-est.year)) )
+
+median(whorl_age$age)
+range(whorl_age$age)
+median(whorl_age$DBH)
+range(whorl_age$DBH)
+```
+
+```{r}
+( sumplot = whorl_age %>% 
+  group_by(plot.no) %>%
+  summarise(n = n()))
+
+median(sumplot$n)
+range(sumplot$n)
+24.5*100
+
+```
+
+Reorganize the data to the plot level with the number of saplings per establishment year.
+
+```{r}
+( plot.level = whorl %>% 
+  group_by(plot.no, est.year) %>%
+  summarise(n = n()) %>%
+  spread(est.year, n, fill = 0) )
+```
+
+Rename the columns.
+
+```{r}
+names(plot.level)[2:45] = c("y1967", "y1969", "y1971", "y1973", "y1974", "y1976", "y1978", "y1979", "y1980", "y1981", "y1982", "y1983", "y1984", "y1985", "y1986", "y1987", "y1988", "y1989", "y1990", "y1991", "y1992", "y1993", "y1994", "y1995", "y1996", "y1997", "y1998", "y1999", "y2000", "y2001", "y2002", "y2003", "y2004", "y2005", "y2006", "y2007", "y2008", "y2009", "y2010", "y2011", "y2012", "y2013", "y2014", "y2015") 
+
+head(plot.level)
+```
+
+We will also add some condensed categories for establishment as pre-outbreak (before 1999) and post-outbreak (1999-2015) with 1999 being the break point as well as pre-outbreak (before 1999), during outbreak (1999-2006) and post-outbreak
+(2006-2015).
+
+# Statistical Analysis
+
+## Mixed Model with pre/during/post groupings with negative binomial
+Pre 1990-1998
+During 1999-2006
+Post 2007-2015
+
+Select the data needed.
+
+```{r}
+( plot.level1990 = plot.level %>%
+    mutate(pre1990 = y1990 + y1991 + y1992 + y1993 + y1994 + y1995 + y1996 + y1997 + y1998) %>%
+    mutate(during1999 = y1999 + y2000 + y2001 + y2002 + y2003 + y2004 + y2005 + y2006) %>%
+    mutate(post2007 =  y2007 + y2008 + y2009 + y2010 + y2011 + y2012 + y2013 + y2014 + y2015) )
+```
+
+## Create Pre/During/Post Data Set 
+
+Pre3 1990-1998 and earlier. During includes 1999 thru 2006. Post includes 2007-2015
+
+```{r}
+( dis1990 = plot.level1990 %>%
+    dplyr::select(plot.no, pre1990:post2007) )
+```
+
+Next we reorganize the data set with 2 groupings, This should double our sample size from n=20 to n=60
+
+```{r}
+( dis1990 = dis1990 %>%
+    tidyr::gather(est.time, sapling.ct, pre1990:post2007) )
+```
+
+Here we add a column and generate a unique identifier for each group in each plot.
+
+```{r}
+( dis1990 = mutate(dis1990, transunique = paste(plot.no, est.time, sep = ".") ) )
+```
+
+
+```{r}
+dis1990$est.time = factor(dis1990$est.time, levels = c("pre1990", "during1999", "post2007"),
+       labels = c("Pre (1990-1998)", "During (1999-2006)", "Post (2007-2015)"))
+head(dis1990)
+```
+
+### MODEL
+```{r}
+fitdis1990 = glmer.nb(sapling.ct ~ est.time + (1 | plot.no), data = dis1990)
+```
+
+### Residuals
+
+```{r, include=FALSE}
+fitdis1990.res = simulateResiduals(fittedModel = fitdis1990, n = 250)
+
+fitdis1990.res$scaledResiduals
+
+fitdis1990.res$scaledResidualsNormal
+```
+
+In the plot below we are looking for the points in the QQ plot to fall along the RED linen. In the Residuals vs.predicted plot were are looking for the lines to be relatively horizontal. All looks good. 
+
+```{r}
+plotSimulatedResiduals(simulationOutput = fitdis1990.res)
+```
+
+QQ plot looks ok with no significant deviations from the plot line. The residual vs predicted plot looks ok, lines are relatively horizontal. Th lack of horizontality maybe due to lack of data in certain regions, but these generally look adequate.
+
+The qqplot here fits better then the above plot, which indicates that the split of pre/during/post establishment removes some of the noise when there are only 2 categories of pre/post that does not seem to account for the variability as well.
+
+QQplot looks ok with no significant deviations. The residual vs predicted plot looks ok with lines that are relatively horizontal.
+
+### Overdispersion
+
+```{r}
+simulationOutput1990 <- simulateResiduals(fittedModel = fitdis1990, refit = T, n = 20)
+testOverdispersion(simulationOutput1990)
+```
+
+### Summary 
+
+```{r}
+summary(fitdis1990)
+```
+
+
+### Estimates
+```{r}
+lsmeans(fitdis1990, pairwise ~ est.time, type = "response", infer = TRUE, level = .95, adjust = 'bon')
+```
+
+```{r}
+summary(lsmeans(fitdis1990, pairwise ~ est.time), type = "response", infer = TRUE, level = .95, adjust = "bon")
+```
+
+```{r}
+summary(lsmeans(fitdis1990, revpairwise ~ est.time), type = "response", infer = TRUE, level = .95, adjust = "bon")
+```
+
+##### Data Frame
+
+```{r}
+( fitdis1990.graph = data.frame(summary(lsmeans(fitdis1990, pairwise ~ est.time, type = "response", infer = TRUE))) )
+```
+
+```{r eval=FALSE, include=FALSE}
+output = fitdis1990.graph %>%
+  select(lsmeans.est.time, lsmeans.response, lsmeans.asymp.LCL, lsmeans.asymp.UCL) 
+
+output_tab = round( output[, c("lsmeans.response", "lsmeans.asymp.LCL", "lsmeans.asymp.UCL")], 2) 
+
+rownames(output_tab) = c("Pre (1990-1998)", "During (1999-2006)", "Post (2007-2015)")
+
+colnames(output_tab) = c("Estimate", "Lower CI", "Upper CI")
+
+( output_t1 = output_tab[, c("Estimate", "Lower CI", "Upper CI")] )
+```
+```{r eval=FALSE, include=FALSE}
+output = fitdis1990.graph %>%
+  select(contrasts.contrast, contrasts.response.ratio, contrasts.p.value) 
+
+output_tab = round( output[, c("lsmeans.response", "lsmeans.asymp.LCL", "lsmeans.asymp.UCL")], 2) 
+
+rownames(output_tab) = c("Pre (1990-1998)", "During (1999-2006)", "Post (2007-2015)")
+
+colnames(output_tab) = c("Estimate", "Lower CI", "Upper CI")
+
+( output_t1 = output_tab[, c("Estimate", "Lower CI", "Upper CI")] )
+```
+
+
+### Figure
+```{r}
+( graph.estimate = ggplot(fitdis1990.graph, aes(x = lsmeans.est.time, y = lsmeans.response)) +
+    geom_errorbar(width = .15, lwd=.75, aes(ymin=lsmeans.asymp.LCL, ymax=lsmeans.asymp.UCL) )  + 
+    geom_point(size=3) +
+    ylab("Seedling Count") + xlab("") +
+    theme_bw() + 
+    theme(legend.position = "none") + 
+    theme(panel.grid.major = element_blank(), 
+          axis.line = element_line(colour = "black")) + 
+    theme(axis.title.x = element_text(face = "bold", size = 12, hjust = 0.5, vjust = -0.3),
+        axis.title.y = element_text(face = "bold", size = 12, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        axis.line = element_line(colour = "black")) + 
+    theme(strip.background = element_blank(), strip.text = element_blank()))
+```
+
+```{r}
+( graph.estimate2 = ggplot(fitdis1990.graph, aes(x = lsmeans.est.time, y = lsmeans.response)) +
+    geom_errorbar(width = .15, lwd=.75, aes(ymin=lsmeans.asymp.LCL, ymax=lsmeans.asymp.UCL) )  + 
+    geom_point(size=3) +
+    ylab("Seedling Count") + xlab("") +
+    theme_bw() + 
+    theme(legend.position = "none") + 
+    theme(panel.grid.major = element_blank(), 
+          axis.line = element_line(colour = "black")) + 
+    theme(axis.title.x = element_text(face = "bold", size = 12, hjust = 0.5, vjust = -0.3),
+        axis.title.y = element_text(face = "bold", size = 12, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black", angle = 45, hjust = 0.45, vjust = .5),
+        axis.text.y = element_text(size = 10, color = "black"),
+        axis.line = element_line(colour = "black")) + 
+    theme(strip.background = element_blank(), strip.text = element_blank()))
+
+
+```
+
+
+### MODEL - not mixed
+```{r}
+fitdis1990nb = glm.nb(sapling.ct ~ est.time, data = dis1990)
+```
+
+### Residuals
+
+```{r, include=FALSE}
+fitdis1990nb.res = simulateResiduals(fittedModel = fitdis1990nb, n = 250)
+
+fitdis1990nb.res$scaledResiduals
+
+fitdis1990nb.res$scaledResidualsNormal
+```
+
+In the plot below we are looking for the points in the QQ plot to fall along the RED linen. In the Residuals vs.predicted plot were are looking for the lines to be relatively horizontal. All looks good. 
+
+```{r}
+plotSimulatedResiduals(simulationOutput = fitdis1990nb.res)
+```
+
+QQ plot looks ok with no significant deviations from the plot line. The residual vs predicted plot looks ok, lines are relatively horizontal. Th lack of horizontality maybe due to lack of data in certain regions, but these generally look adequate.
+
+The qqplot here fits better then the above plot, which indicates that the split of pre/during/post establishment removes some of the noise when there are only 2 categories of pre/post that does not seem to account for the variability as well.
+
+QQplot looks ok with no significant deviations. The residual vs predicted plot looks ok with lines that are relatively horizontal.
+
+### Overdispersion
+
+```{r}
+simulationOutput1990nb <- simulateResiduals(fittedModel = fitdis1990nb, refit = T, n = 20)
+testOverdispersion(simulationOutput1990nb)
+```
+
+### Summary 
+
+```{r}
+summary(fitdis1990nb)
+```
+
+
+### Estimates
+```{r}
+lsmeans(fitdis1990nb, pairwise ~ est.time, type = "response", infer = TRUE, level = .95, adjust = 'bon')
+```
+
+
+
+```{r}
+summary(lsmeans(fitdis1990nb, pairwise ~ est.time), type = "response", infer = TRUE, level = .95, adjust = "bon")
+```
+
+```{r}
+summary(lsmeans(fitdis1990nb, revpairwise ~ est.time), type = "response", infer = TRUE, level = .95, adjust = "bon")
+```
+
+revpairwise
+##### Data Frame
+
+```{r}
+( fitdis1990nb.graph = data.frame(summary(lsmeans(fitdis1990nb, pairwise ~ est.time, type = "response", infer = TRUE))) )
+```
+
+
+
+## Extract Estimates for Graph
+
+```{r}
+( response.graph = data.frame(summary(lsmeans(fitdis1990nb, pairwise ~ est.time), type = "response", infer = TRUE)$lsmeans)) 
+```
+
+### Figure Response Estimates
+```{r}
+(plot_time.est = ggplot(response.graph, aes(x = est.time, y = response)) + 
+  geom_errorbar(width = .2, lwd = .75, aes(ymin = asymp.LCL, ymax = asymp.UCL)) + 
+  geom_point(size = 3) + 
+  xlab(NULL) + 
+   geom_text(aes(label = c("", "","")), vjust = "inward", hjust = "inward", size = 4) +  
+   annotate("text", label = "During(1999-2006)", x = 2.25, y = 8.65, size = 3.5, colour = "black") +
+   annotate("text", label = "Post(2007-2015)", x = 3.25, y = 12.15, size = 3.5, colour = "black") +  
+      annotate("text", label = "Pre(1990-1998)", x = 1.25, y = 5, size = 3.5, colour = "black") + 
+   scale_y_continuous(name="Count of recruits", limits=c(0, 22), breaks = c(0, 5, 10, 15, 20)) +
+coord_flip() +
+theme_bw() + 
+  theme(axis.ticks.y = element_blank(),
+axis.text.y = element_blank()) +
+theme(legend.position = "none") +   
+  theme(plot.margin = unit(c(t = 0.1, r = 0.1, b = 0.1, l = 0.5), "cm")) +
+theme(panel.grid.major = element_blank() )  )
+```
+### Manuscript Figure: Response Estimates
+```{r fig.height=3, fig.width=4, echo= FALSE}
+(plot_time.est_ppt = ggplot(response.graph, aes(x = est.time, y = response)) + 
+  geom_errorbar(width = .2, lwd = .75, aes(ymin = asymp.LCL, ymax = asymp.UCL)) + 
+  geom_point(size = 3) + 
+  xlab(NULL) + 
+   geom_text(aes(label = c("", "","")), vjust = "inward", hjust = "inward", size = 4) +  
+   annotate("text", label = "During(1999-2006)", x = 2.25, y = 8.65, size = 3.5, colour = "black") +
+   annotate("text", label = "Post(2007-2015)", x = 3.25, y = 12.15, size = 3.5, colour = "black") +  
+      annotate("text", label = "Pre(1990-1998)", x = 1.25, y = 5, size = 3.5, colour = "black") + 
+   scale_y_continuous(name="Count of recruits", limits=c(0, 22), breaks = c(0, 5, 10, 15, 20)) +
+coord_flip() +
+theme_bw() + 
+  theme(axis.ticks.y = element_blank(),
+axis.text.y = element_blank()) +
+theme(legend.position = "none") +   
+  theme(plot.margin = unit(c(t = 0.1, r = 0.1, b = 0.1, l = 0.5), "cm")) +
+theme(panel.grid.major = element_blank() )  )
+```
+
+
+```{r eval=FALSE, include=FALSE}
+ggsave("../figs/2019-07-19_unburned_estimates.jpeg", plot = plot_time.est_ppt, width = 4, height = 3, units = c("in"), dpi=600 )
+```
+
+## Extract contrast for graph
+```{r}
+( rec.contrast = data.frame(summary(lsmeans(fitdis1990nb, revpairwise ~ est.time),type = "response", infer = TRUE)$contrasts)) 
+```
+
+### Figure Odds Ratio
+```{r}
+(plot_time.contrast = ggplot(rec.contrast, aes(x = contrast, y = ratio)) + 
+  geom_errorbar(width = .2, lwd = .75, aes(ymin = asymp.LCL, ymax = asymp.UCL)) + 
+  geom_point(size = 3) + 
+  geom_hline(aes(yintercept=1), colour="#990000", linetype="dashed", size=1)  + xlab(NULL) + 
+
+   geom_text(aes(label = c("", "","")), vjust = "inward", hjust = "inward", size = 4) +  
+   annotate("text", label = "Post / During", x = 2.25, y = 3, size = 3.5, colour = "black") +
+   annotate("text", label = "Post / Pre", x = 3.25, y = 4.5, size = 3.5, colour = "black") +  
+      annotate("text", label = "During / Pre", x = 1.25, y = 3.5, size = 3.5, colour = "black") +  
+scale_y_continuous(name="Response ratio", limits=c(0, 8), breaks = c(1, 3, 5, 7)) +
+coord_flip() +
+theme_bw() + 
+  theme(axis.ticks.y = element_blank(),
+axis.text.y = element_blank()) +
+theme(legend.position = "none") +   
+  theme(plot.margin = unit(c(t = 0.1, r = 0.1, b = 0.1, l = 0.5), "cm")) +
+theme(panel.grid.major = element_blank() )  )
+```
+### Supplement Figure: Odds Ratio
+```{r fig.height=3, fig.width=4}
+(plot_time.contrast_ppt = ggplot(rec.contrast, aes(x = contrast, y = ratio)) + 
+  geom_errorbar(width = .2, lwd = .75, aes(ymin = asymp.LCL, ymax = asymp.UCL)) + 
+  geom_point(size = 3) + 
+  geom_hline(aes(yintercept=1), colour="#990000", linetype="dashed", size=1)  + xlab(NULL) + 
+
+   geom_text(aes(label = c("", "","")), vjust = "inward", hjust = "inward", size = 4) +  
+   annotate("text", label = "Post / During", x = 2.25, y = 3, size = 3.5, colour = "black") +
+   annotate("text", label = "Post / Pre", x = 3.25, y = 4.5, size = 3.5, colour = "black") +  
+      annotate("text", label = "During / Pre", x = 1.25, y = 3.5, size = 3.5, colour = "black") +  
+scale_y_continuous(name="Response ratio", limits=c(0, 8), breaks = c(1, 3, 5, 7)) +
+coord_flip() +
+theme_bw() + 
+  theme(axis.ticks.y = element_blank(),
+axis.text.y = element_blank()) +
+theme(legend.position = "none") +   
+  theme(plot.margin = unit(c(t = 0.1, r = 0.1, b = 0.1, l = 0.5), "cm")) +
+theme(panel.grid.major = element_blank() )  )
+```
+
+
+```{r eval=FALSE, include=FALSE}
+ggsave("../figs/2019-07-19_unburned_odds_supplement.jpeg", plot = plot_time.contrast_ppt, width = 4, height = 3, units = c("in"), dpi=600 )
+```
+
+```{r fig.height=3, fig.width=6}
+(grid_time1 = cowplot::plot_grid(plot_time.est, plot_time.contrast , labels = c("A", "B"), ncol = 2))
+```
+
+
+```{r eval=FALSE, include=FALSE}
+ggsave("../figs/2019-03-18_timing-unburned.jpeg", plot = grid_time1, width = 6, height = 3, units = c("in"), dpi=600 )
+```
+** THE END **
