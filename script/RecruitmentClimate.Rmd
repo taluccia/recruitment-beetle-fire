@@ -414,12 +414,12 @@ frostfire1.res$scaledResidualsNormal
 
 In the plot below we are looking for the points in the QQ plot to fall along the RED lines. In the Residuals vs.predicted plot were are looking for the lines to be relatively horizontal. All looks good. 
 
-```{r}
-plotSimulatedResiduals(simulationOutput = frostfire1.res)
+```{r, echo=FALSE}
+plot(frostfire1.res)
 ```
 
 ```{r}
-testOverdispersion(frostfire1.res)
+testDispersion(frostfire1.res)
 ```
 
 ### Summary
@@ -461,7 +461,7 @@ seedling.weather = mutate(seedling.weather, predfrostfire1 = exp(predfrostfire1$
 
 ### Figure with raw data
 
-```{r}
+```{r, echo=FALSE}
 pfrostfire1 = ggplot(data = seedling.weather, aes(x = frost.events, y = seedling.ct, color = factor(fire.type))) + 
               geom_point(size = 2) + 
                geom_line(aes(y=LLfrostfire1, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
@@ -491,7 +491,7 @@ pfrostfire2 = pfrostfire1 +
 
 ###Figure without raw data
 
-```{r}
+```{r, echo=FALSE}
 pfrostfire4 = ggplot(data = seedling.weather, aes(x = frost.events, y = seedling.ct, color = factor(fire.type))) + 
               geom_line(aes(y=LLfrostfire1, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
               geom_line(aes(y=ULfrostfire1, color = factor(fire.type)), linetype='longdash', size = 1) +
@@ -521,6 +521,7 @@ pfrostfire5 = pfrostfire4 +
 
 
 ## Model: Snow & fire
+
 ```{r}
 snowfire1 = glm.nb(seedling.ct ~ sum_PAS:fire.type + offset(log(seedling.area)), data = seedling.weather)
 ```
@@ -535,12 +536,13 @@ snowfire1.res$scaledResidualsNormal
 
 In the plot below we are looking for the points in the QQ plot to fall along the RED lines. In the Residuals vs.predicted plot were are looking for the lines to be relatively horizontal. All looks good. 
 
-```{r}
-plotSimulatedResiduals(simulationOutput = snowfire1.res)
+```{r, echo=FALSE}
+plot(snowfire1.res)
 ```
 
+
 ```{r}
-testOverdispersion(snowfire1.res)
+testDispersion(snowfire1.res)
 ```
 
 ### Summary 
@@ -584,7 +586,7 @@ seedling.weather = mutate(seedling.weather, predsnowfire1 = exp(predsnowfire1$fi
 
 ### Figure with raw data
 
-```{r}
+```{r, echo=FALSE}
 psnowfire1 = ggplot(data = seedling.weather, aes(x = sum_PAS, y = seedling.ct, color = factor(fire.type))) + 
               geom_point(size = 2) + 
               geom_line(aes(y=LLsnowfire1, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
@@ -614,7 +616,7 @@ psnowfire2 = psnowfire1 +
 
 ### Figure without raw data
 
-```{r}
+```{r, echo=FALSE}
 psnowfire4 = ggplot(data = seedling.weather, aes(x = sum_PAS, y = seedling.ct, color = factor(fire.type))) +  
               geom_line(aes(y=LLsnowfire1, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
               geom_line(aes(y=ULsnowfire1, color = factor(fire.type)), linetype='longdash', size = 1) +
@@ -659,12 +661,12 @@ CMDfire1.res$scaledResidualsNormal
 
 In the plot below we are looking for the points in the QQ plot to fall along the RED lines. In the Residuals vs.predicted plot were are looking for the lines to be relatively horizontal. All looks good.
 
-```{r}
-plotSimulatedResiduals(simulationOutput = CMDfire1.res)
+```{r, echo=FALSE}
+plot(CMDfire1.res)
 ```
 
 ```{r}
-testOverdispersion(CMDfire1.res)
+testDispersion(CMDfire1.res)
 ```
 
 ### Summary 
@@ -713,7 +715,7 @@ seedling.weather = mutate(seedling.weather, predcmdfire1 = exp(predcmdfire1$fit)
 
 ###Figure with raw data
 
-```{r}
+```{r, echo=FALSE}
 pcmdfire1 = ggplot(data = seedling.weather, aes(x = sum_CMD, y = seedling.ct, color = factor(fire.type))) +
               geom_point(size = 2) + 
               geom_line(aes(y=LLcmdfire1, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
@@ -743,7 +745,7 @@ pcmdfire2 = pcmdfire1 +
 
 ### Figure without raw data
 
-```{r}
+```{r, echo=FALSE}
 pcmdfire4 = ggplot(data = seedling.weather, aes(x = sum_CMD, y = seedling.ct, color = factor(fire.type))) +
               geom_line(aes(y=LLcmdfire1, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
               geom_line(aes(y=ULcmdfire1, color = factor(fire.type)), linetype='longdash', size = 1) +
@@ -782,7 +784,8 @@ head(seedling.weather)
 
 ```{r}
 seed_clim_out = subset(seedling.weather, plot != 27 & plot != 34 & plot != 40) 
-seed_clim_out
+
+datatable(seed_clim_out)
 ```
 
 
@@ -804,12 +807,12 @@ ofrostfire1.res$scaledResidualsNormal
 
 In the plot below we are looking for the points in the QQ plot to fall along the RED lines. In the Residuals vs.predicted plot were are looking for the lines to be relatively horizontal. All looks good.
 
-```{r}
-plotSimulatedResiduals(simulationOutput = ofrostfire1.res)
+```{r, echo=FALSE}
+plot(ofrostfire1.res)
 ```
 
 ```{r}
-testOverdispersion(ofrostfire1.res)
+testDispersion(ofrostfire1.res)
 ```
 
 #### Summary
@@ -882,7 +885,7 @@ pofrostfire2 = pofrostfire1 +
 
 #### Figure without raw data
 
-```{r}
+```{r, echo=FALSE}
 pofrostfire4 = ggplot(data = seed_clim_out, aes(x = frost.events, y = seedling.ct, color = factor(fire.type))) + 
               geom_line(aes(y=LLofrostfire1, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
               geom_line(aes(y=ULofrostfire1, color = factor(fire.type)), linetype='longdash', size = 1) +
@@ -926,12 +929,12 @@ osnowfire1.res$scaledResidualsNormal
 
 In the plot below we are looking for the points in the QQ plot to fall along the RED lines. In the Residuals vs.predicted plot were are looking for the lines to be relatively horizontal. All looks good. 
 
-```{r}
-plotSimulatedResiduals(simulationOutput = osnowfire1.res)
+```{r, echo=FALSE}
+plot(osnowfire1.res)
 ```
 
 ```{r}
-testOverdispersion(osnowfire1.res)
+testDispersion(osnowfire1.res)
 ```
 
 #### Summary 
@@ -1038,7 +1041,7 @@ posnowfire5 = posnowfire4 +
 oCMDfire1 = glm.nb(seedling.ct ~ sum_CMD:fire.type + offset(log(seedling.area)), data = seed_clim_out)
 ```
 
-### Residuals with DHARMa
+### Residuals 
 
 ```{r, include=FALSE}
 oCMDfire1.res = simulateResiduals(fittedModel = oCMDfire1, n = 250)
@@ -1048,12 +1051,12 @@ oCMDfire1.res$scaledResidualsNormal
 
 In the plot below we are looking for the points in the QQ plot to fall along the RED lines. In the Residuals vs.predicted plot were are looking for the lines to be relatively horizontal. All looks good. 
 
-```{r}
-plotSimulatedResiduals(simulationOutput = oCMDfire1.res)
+```{r, echo=FALSE}
+plot(oCMDfire1.res)
 ```
 
 ```{r}
-testOverdispersion(oCMDfire1.res)
+testDispersion(oCMDfire1.res)
 ```
 
 #### Summary 
@@ -1102,7 +1105,7 @@ seed_clim_out = mutate(seed_clim_out, predocmdfire1 = exp(predocmdfire1$fit),
 
 ```
 
-####Figure with raw data
+#### Figure with raw data
 
 ```{r, echo=FALSE}
 pocmdfire1 = ggplot(data = seed_clim_out, aes(x = sum_CMD, y = seedling.ct, color = factor(fire.type))) +
@@ -1202,6 +1205,8 @@ legend3
 
 ```{r, echo=FALSE}
 gridcmd=cowplot::plot_grid(pcmdfire3, pocmdfire3, labels = c("A", "B"), align = "hv", ncol= 2) 
+
+gridcmd
 ```
 
 ```{r eval=FALSE, include=FALSE}
@@ -1209,16 +1214,19 @@ ggsave("../figs/2019-02-06_climate_fire_cmd.jpeg", plot = gridcmd, width = 8, he
 ```
 
 
-```{r, echo=FALSE, fig.height=4, fig.width=8}
+```{r, echo=FALSE}
 gridsnow=cowplot::plot_grid(psnowfire3, posnowfire3, labels = c("A", "B"), align = "hv", ncol= 2) 
+gridsnow
 ```
 
 ```{r eval=FALSE, include=FALSE}
 ggsave("../figs/2019-02-06_climate_fire_snow.jpeg", plot = gridsnow, width = 8, height = 4, units = c("in"), dpi=600 )
 ```
 
-```{r fig.height=4, fig.width=8}
+```{r, echo=FALSE}
 gridfrost=cowplot::plot_grid(pfrostfire3, pofrostfire3, labels = c("A", "B"), align = "hv", ncol= 2) 
+
+gridfrost
 ```
 
 ```{r eval=FALSE, include=FALSE}
@@ -1238,7 +1246,9 @@ gridall1=cowplot::plot_grid(pfrostfire6, psnowfire6, pcmdfire6, pocmdfire6, labe
   draw_label("*", x = .98, y = .63, size = 20, fontface = "bold") 
 
 
-(gridall2 = plot_grid(gridall1, legend, ncol=1, rel_widths = c(1, .1), rel_heights = c(1, .05)) ) 
+gridall2 = plot_grid(gridall1, legend, ncol=1, rel_widths = c(1, .1), rel_heights = c(1, .05)) 
+
+gridall2
 ```
 
 ```{r eval=FALSE, include=FALSE}
