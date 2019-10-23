@@ -1,0 +1,354 @@
+---
+title: 'Seedling density across a gradient of fire severity'
+author: "Anna Talucci"
+date: "20 July 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Overview
+
+For short interval beetle+fire disturbances we are interested if time since beetle attack impacts the aerial seedbank and subsequent regeneration after fire. Seedling count data was acquired over various sized plots; in order to account for this we analyzed out data as a negative bionomial and accounted for the effort of the seedling count collection.  Effort refers to the log of the area in which seedlings were counted in. 
+
+The goal of this analysis is twofold. First, to assess seedling density as a function of plots burning or not burning. Second, to assess seedling density as a function of the type of burning conditions - unburned, surface, severe surface, and crown.
+
+Seedling density was gathered as a variety of scales from 1 square meter to 100 square meters. Seedlings is being used broadly to include saplings (larger, older, more developed trees) in unburned plots. Due to the variability in plot size for data collection, we will account for this in our statistical models. Plot size is the effort and is accounted for in the statistical model with an offset for area.
+
+# Packages
+
+The following Packages are required for the below analyses:
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(MASS)
+library(car)
+library(GGally)
+library(lme4)
+library(DHARMa)
+library(lsmeans)
+library(cowplot)
+library(RColorBrewer)
+library(multcompView)
+library(emmeans)
+```
+
+# Data
+
+Burn plot data
+
+```{r}
+fire = read.csv("../data/2018-09-20_ch2-burnedplots-wcodes-edit43.csv", header = TRUE, sep = ",", strip.white = TRUE)
+head(fire)
+```
+
+Burn plot data: Seedling Effort (area collected)
+
+```{r}
+fire.seedeffort = read.csv("../data/chapter2_analysis34_seedlingeffort_11december2017.csv", header = TRUE, sep = ",", strip.white = TRUE)
+head(fire.seedeffort)
+```
+
+Here we will combine our effort data with our burn plot data
+
+```{r}
+burned3 = merge(fire, fire.seedeffort, by = c("plot"))
+head(burned3)
+```
+
+```{r}
+burned3 = mutate(burned3, prop.bom = bom/stems)
+head(burned3)
+```
+
+Select plot, fire.type, seedling.ct, seedling area
+
+```{r}
+( burnt.plot = burned3 %>%
+    dplyr::select(plot, fire.type, seedling.ct:prop.bom) )
+```
+
+Unburned Data
+
+```{r}
+unburnt3 = read.csv("../data/chapter2_unburnplotsapcondensed_11november2017.csv", header=TRUE, sep = ",", strip.white = TRUE) 
+
+head(unburnt3)
+```
+
+```{r}
+unburnt3 = mutate(unburnt3, prop.bom = bom/stems)
+head(unburnt3)
+```
+
+```{r}
+unburnt.plot = unburnt3 %>%
+    dplyr::select(plot, fire, sapling.density, prop.bom)
+
+head(unburnt.plot)
+```
+
+```{r}
+unburnt.plot = mutate(unburnt.plot, fire.type = fire)  
+unburnt.plot = mutate(unburnt.plot, seedling.ct = sapling.density)  
+unburnt.plot = mutate(unburnt.plot, seedling.area = 100)  
+
+head(unburnt.plot)
+```
+
+
+```{r}
+unburnt.plot2 = unburnt.plot %>%
+    dplyr::select(plot, fire.type, seedling.ct, seedling.area, prop.bom) 
+```
+
+```{r}
+seedlings.plot = rbind(burnt.plot, unburnt.plot2) 
+
+head(seedlings.plot)
+```
+
+```{r}
+write.csv(seedlings.plot, file = "../output/2018-08-20_allseedlings.csv")
+```
+
+```{r}
+seedlings.plot = mutate(seedlings.plot, seedling.per.area = seedling.ct/seedling.area)
+
+head(seedlings.plot)
+```
+
+```{r}
+seedlings.plot$fire.type = factor(seedlings.plot$fire.type, 
+       levels = c("crown", "sev.surf", "surface", "unburned"),
+       labels = c("Crown", "Severe Surface", "Light Surface", "Fire refugia"))
+
+head(seedlings.plot)
+```
+
+```{r, echo=FALSE}
+ggplot(data = seedlings.plot, aes(x = prop.bom , y = seedling.per.area, color = factor(fire.type))) +
+         geom_point(size = 3) +
+         scale_color_manual(values=c("#d7191c", "#fdae61", "#abdda4", "#2b83ba")) +
+          ylab("seedlings counts") +
+          xlab("proproportion of beetle-killed")  +
+          ggtitle("Seedlings vs. OUtbreak severity") +
+          theme_bw() 
+```
+
+### MODEL
+
+```{r}
+fitcomp1 = glm.nb(seedling.ct ~ fire.type + offset(log(seedling.area)), data = seedlings.plot)
+```
+
+#### Residuals
+
+```{r, include=FALSE}
+fitcomp1.res = simulateResiduals(fittedModel = fitcomp1, n = 250)
+fitcomp1.res$scaledResiduals
+fitcomp1.res$scaledResidualsNormal
+```
+
+In the plot below we are looking for the points in the QQ plot to fall along the RED linen. In the Residuals vs.predicted plot were are looking for the lines to be relatively horizontal. All looks good. 
+
+```{r, echo=FALSE}
+plot(fitcomp1.res)
+```
+
+QQ plot looks ok with no significant deviations from the plot line. The residual vs predicted plot looks ok, lines are relatively horizontal. Th lack of horizontality maybe due to lack of data in certain regions, but these generally look adequate.
+
+The qqplot here fits better then the above plot, which indicates that the split of pre/during/post establishment removes some of the noise when there are only 2 categories of pre/post that does not seem to account for the variability as well.
+
+QQplot looks ok with no significant deviations. The residual vs predicted plot looks ok with lines that are relatively horizontal.
+
+Evaluate overdispersion in the model. 
+
+```{r}
+testDispersion(fitcomp1.res)
+```
+
+#### Summary 
+
+```{r}
+summary(fitcomp1)
+```
+
+#### Estimates
+
+```{r}
+lsmeans(fitcomp1, pairwise ~ fire.type, type = "response", infer = TRUE, level = .95, adjust = 'bon')
+```
+
+```{r}
+summary(lsmeans(fitcomp1, pairwise ~ fire.type), type = "response", infer = TRUE, level = .95, adjust = "bon")
+```
+
+
+#### Data Frame
+
+Place model summary information into a dataframe.
+
+```{r}
+(summary(lsmeans(fitcomp1, pairwise ~ fire.type, type = "response", infer = TRUE)))
+```
+
+```{r}
+( fitcomp1.graph = data.frame(summary(lsmeans(fitcomp1, pairwise ~ fire.type, type = "response", infer = TRUE))$lsmeans) )
+```
+
+```{r}
+( data.frame(summary(lsmeans(fitcomp1, pairwise ~ fire.type, type = "response", infer = TRUE))$contrasts) )
+```
+
+
+```{r eval=FALSE, include=FALSE}
+marginal = lsmeans(fitcomp1, ~ fire.type, type = "response")
+marginal
+
+abc = cld(marginal) 
+abc
+```
+
+#### Figure
+
+```{r, echo=FALSE}
+graph.comp = ggplot(fitcomp1.graph, aes(x = fire.type, y = response)) +
+    geom_errorbar(width = .15, lwd =.75, aes(ymin = asymp.LCL, ymax = asymp.UCL) )  + 
+    geom_point(size=3) +
+    ylab("Seedling Count") + xlab("") +
+    theme_bw() + 
+    theme(legend.position = "none") + 
+    theme(panel.grid.major = element_blank(), 
+          axis.line = element_line(colour = "black")) + 
+    theme(axis.title.x = element_text(face = "bold", size = 12, hjust = 0.5, vjust = -0.3),
+        axis.title.y = element_text(face = "bold", size = 12, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        axis.line = element_line(colour = "black")) + 
+    theme(strip.background = element_blank(), strip.text = element_blank())
+
+graph.comp
+```
+
+
+## Extract Etimates for Graph
+
+```{r}
+( response.plot = data.frame(summary(lsmeans(fitcomp1, pairwise ~ fire.type), type = "response", infer = TRUE)$lsmeans)) 
+```
+
+## Manuscript Figure
+
+```{r, echo=FALSE}
+plot_response = ggplot(response.plot, aes(x = fire.type, y = response)) + 
+  geom_errorbar(width = .2, lwd = .75, aes(ymin = asymp.LCL, ymax = asymp.UCL)) + 
+  geom_point(size = 3) + 
+  xlab(NULL) + 
+   geom_text(aes(label = c("", "","", "")), vjust = "inward", hjust = "inward", size = 4) +  
+   annotate("text", label = "Crown", x = 1.25, y = 100, size = 3.5, colour = "black") +
+   annotate("text", label = "Severe surface", x = 2.25, y = 100, size = 3.5, colour = "black") +  
+      annotate("text", label = "Light surface", x = 3.25, y = 50, size = 3.5, colour = "black") +
+   annotate("text", label = "Fire Refugia", x = 4.25, y = 30, size = 3.5, colour = "black") +
+   scale_y_continuous(name="Count of recruits") +
+coord_flip() +
+theme_bw() + 
+  theme(axis.ticks.y = element_blank(),
+axis.text.y = element_blank()) +
+theme(legend.position = "none") +   
+  theme(plot.margin = unit(c(t = 0.1, r = 0.1, b = 0.1, l = 0.5), "cm")) +
+theme(panel.grid.major = element_blank() )  
+
+plot_response
+```
+
+```{r, echo=FALSE, fig.height=3, fig.width=4}
+plot_response_ppt = ggplot(response.plot, aes(x = fire.type, y = response)) + 
+  geom_errorbar(width = .2, lwd = .75, aes(ymin = asymp.LCL, ymax = asymp.UCL)) + 
+  geom_point(size = 3) + 
+  xlab(NULL) + 
+   geom_text(aes(label = c("", "","", "")), vjust = "inward", hjust = "inward", size = 4) +  
+   annotate("text", label = "Crown", x = 1.25, y = 100, size = 3.5, colour = "black") +
+   annotate("text", label = "Severe surface", x = 2.25, y = 100, size = 3.5, colour = "black") +  
+      annotate("text", label = "Light surface", x = 3.25, y = 50, size = 3.5, colour = "black") +
+   annotate("text", label = "Fire Refugia", x = 4.25, y = 30, size = 3.5, colour = "black") +
+   scale_y_continuous(name="Count of recruits") +
+coord_flip() +
+theme_bw() + 
+  theme(axis.ticks.y = element_blank(),
+axis.text.y = element_blank()) +
+theme(legend.position = "none") +   
+  theme(plot.margin = unit(c(t = 0.1, r = 0.1, b = 0.1, l = 0.5), "cm")) +
+theme(panel.grid.major = element_blank())  
+
+plot_response_ppt
+```
+
+```{r eval=FALSE, include=FALSE}
+ggsave("../figs/2019-07-20_FireSeverity.jpeg", plot = plot_response_ppt, width = 4, height = 3, units = c("in"), dpi=600 )
+```
+
+## Extract Odds Ratios for graph
+
+```{r}
+( rec.contrast = data.frame(summary(lsmeans(fitcomp1, pairwise ~ fire.type),type = "response", infer = TRUE)$contrasts)) 
+```
+
+```{r, echo=FALSE}
+plot_contrast = ggplot(rec.contrast, aes(x = contrast, y = ratio)) + 
+  geom_errorbar(width = .2, lwd = .75, aes(ymin = asymp.LCL, ymax = asymp.UCL)) + 
+  geom_point(size = 3) + 
+  geom_hline(aes(yintercept=1), colour="#990000", linetype="dashed", size=1)  + xlab(NULL) + 
+   geom_text(aes(label = c("", "","", "", "", "")), vjust = "inward", hjust = "inward", size = 4) + 
+      annotate("text", label = "Severe surface / Light surface", x = 6.3, y = 10, size = 3.5, colour = "black") + 
+    annotate("text", label = "Severe surface / Fire refugia", x = 5.3, y = 10, size = 3.5, colour = "black") +
+   annotate("text", label = "Light surface / Fire refugia", x = 4.3, y = 10, size = 3.5, colour = "black") + 
+   annotate("text", label = "Crown / Severe surface", x = 3.3, y = 10, size = 3.5, colour = "black") +
+   annotate("text", label = "Crown / Light surface", x = 2.3, y = 10, size = 3.5, colour = "black") +  
+      annotate("text", label = "Crown / Fire refugia", x = 1.3, y = 10, size = 3.5, colour = "black") +
+ 
+scale_y_continuous(name="Response ratio", limits=c(0, 20), breaks = c(1, 5, 10, 15, 20)) +
+coord_flip() +
+theme_bw() + 
+  theme(axis.ticks.y = element_blank(),
+axis.text.y = element_blank()) +
+theme(legend.position = "none") +   
+  theme(plot.margin = unit(c(t = 0.1, r = 0.1, b = 0.1, l = 0.5), "cm")) +
+theme(panel.grid.major = element_blank()) 
+
+plot_contrast
+```
+
+```{r, echo=FALSE, fig.height=3, fig.width=4}
+plot_contrast_ppt = ggplot(rec.contrast, aes(x = contrast, y = ratio)) + 
+  geom_errorbar(width = .2, lwd = .75, aes(ymin = asymp.LCL, ymax = asymp.UCL)) + 
+  geom_point(size = 3) + 
+  geom_hline(aes(yintercept=1), colour="#990000", linetype="dashed", size=1)  + xlab(NULL) + 
+   geom_text(aes(label = c("", "","", "", "", "")), vjust = "inward", hjust = "inward", size = 4) + 
+      annotate("text", label = "Severe surface / Light surface", x = 6.3, y = 10, size = 3.5, colour = "black") + 
+    annotate("text", label = "Severe surface / Fire refugia", x = 5.3, y = 10, size = 3.5, colour = "black") +
+   annotate("text", label = "Light surface / Fire refugia", x = 4.3, y = 10, size = 3.5, colour = "black") + 
+   annotate("text", label = "Crown / Severe surface", x = 3.3, y = 10, size = 3.5, colour = "black") +
+   annotate("text", label = "Crown / Light surface", x = 2.3, y = 10, size = 3.5, colour = "black") +  
+      annotate("text", label = "Crown / Fire refugia", x = 1.3, y = 10, size = 3.5, colour = "black") +
+ 
+scale_y_continuous(name="Response ratio", limits=c(0, 20), breaks = c(1, 5, 10, 15, 20)) +
+coord_flip() +
+theme_bw() + 
+  theme(axis.ticks.y = element_blank(),
+axis.text.y = element_blank()) +
+theme(legend.position = "none") +   
+  theme(plot.margin = unit(c(t = 0.1, r = 0.1, b = 0.1, l = 0.5), "cm")) +
+theme(panel.grid.major = element_blank())
+
+plot_contrast_ppt
+```
+
+
+```{r, echo=FALSE, fig.height=3, fig.width=6}
+(grid_fire = cowplot::plot_grid(plot_response, plot_contrast , labels = c("A", "B"), ncol = 2))
+```
