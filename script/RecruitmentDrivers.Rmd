@@ -1,0 +1,1183 @@
+---
+title: 'Analyses: drivers of recruitment'
+author: "Anna Talucci"
+date: "July 19, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+rm(list=ls()) 
+```
+
+
+
+# Overview
+
+For short interval beetle+fire disturbances we are interested if time since beetle attack impacts the aerial seedbank and subsequent regeneration after fire. Seedling count data was acquired over various sized plots; in order to account for this we analyzed out data as a negative bionomial and accounted for the effort of the seedling count collection.  Effort refers to the log of the area in which seedlings were counted in. 
+
+The goal of this analysis is twofold. First, to assess seedling density as a function of plots burning or not burning. Second, to assess seedling density as a function of the type of burning conditions - unburned, surface, severe surface, and crown.
+
+Seedling/sapling density was gathered as a variety of scales from 1 square meter to 100 square meters. Seedlings is being used broadly to include saplings (larger, older, more developed trees) in unburned plots. Due to the variability in plot size for data collection, we will account for this in our statistical models. Plot size is the effort and is accounted for in the statistical model with an offset for area.
+
+Analyses focus on the drivers of lodgepole pine recruitment including: fire severity, mountain pine beetle outbreak severity, cone abundance, branch retention, open cones, exposed soil, snag fall, 
+
+# Packages
+
+The following Packages are required for the below analyses:
+library(GGally)
+
+```{r, message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(MASS)
+library(car)
+library(lme4)
+library(DHARMa)
+library(lsmeans)
+library(cowplot)
+library(RColorBrewer)
+library(DT)
+```
+
+# Data
+
+Read in burned plot data
+
+```{r}
+fire = read.csv("../data/2018-09-20_ch2-burnedplots-wcodes-edit43.csv", header = TRUE, sep = ",", strip.white = TRUE)
+
+summary(fire)
+```
+
+```{r}
+datatable(fire)
+```
+
+Readin data for seedling effort (area collected)
+
+```{r}
+fire.seedeffort = read.csv("../data/chapter2_analysis34_seedlingeffort_11december2017.csv", header = TRUE, sep = ",", strip.white = TRUE)
+
+summary(fire.seedeffort)
+
+```
+
+Combine seedling effort data with burn plot data
+
+```{r}
+fire2 = merge(fire, fire.seedeffort, by = c("plot"))
+head(fire2)
+```
+
+```{r}
+str(fire2)
+```
+
+Read data for surface variables (soil)
+
+```{r}
+surf.fire = read.csv("../data/surf_bom_utm.csv", header=TRUE, sep = ",", strip.white = TRUE)
+head(surf.fire)
+```
+
+```{r}
+soil = surf.fire %>%
+    dplyr::select(plot, stems, soil)
+
+head(soil)
+```
+
+Create a variable called prop.soil by converted from continuous percent to continuous proportion
+
+```{r}
+soil = transform(soil, prop.soil = soil*0.01)
+head(soil)
+```
+
+Add soil data to data frame created above called fire2 
+
+```{r}
+fire2 = merge(fire2, soil, by = c("plot", "stems"))
+head(fire2)
+```
+
+```{r}
+dc = surf.fire %>%
+    dplyr::select(plot, stems, DC1:DC4, deep.char) %>%
+    mutate(noDC = DC1) %>%
+    mutate(partDC = DC2) %>%
+    mutate(fullDC = DC3 + DC4) %>%
+    mutate(allDC = deep.char)
+
+head(dc)
+```
+
+```{r}
+dc = dc %>%
+    dplyr::select(plot, stems, noDC:allDC)  
+head(dc)
+```
+
+```{r}
+fire2 = merge(fire2, dc, by = c("plot", "stems"))
+head(fire2)
+```
+
+Read in Coarse Woody Debris (CWD) data
+
+```{r}
+cwddata = read.csv("../data/2018-09-25_ch2_cwd.csv", header = TRUE, sep = ",", strip.white = TRUE)
+
+summary(cwddata)
+```
+
+## Beetle+Fire Dataset
+
+```{r}
+fire2 = mutate(fire2, prop.bom = bom/stems)
+fire2 = mutate(fire2, prop.prefire =  (bom + upf)/stems)
+fire2 = mutate(fire2, prop.canopy = yes.canopy/stems)
+fire2 = mutate(fire2, prop.nocanopy = no.canopy/stems)
+fire2 = mutate(fire2, prop.opencone = yes.seed/stems)
+fire2 = mutate(fire2, prop.closedcone = no.seed/stems)
+fire2 = mutate(fire2, prop.cone.ct = cone.ct/stems)
+fire2 = mutate(fire2, prop.fulldc = fullDC/stems)
+fire2 = mutate(fire2, prop.partdc = partDC/stems)
+fire2 = mutate(fire2, prop.nodc = noDC/stems)
+fire2 = mutate(fire2, prop.alldc = allDC/stems)
+
+
+```
+
+```{r}
+datatable(fire2)
+```
+
+
+# Data visualization
+## Seedling count
+```{r, echo=FALSE}
+qplot(seedling.ct, data = fire2)
+```
+## Seedling Count by fire type
+```{r, echo=FALSE}
+qplot(fire.type, seedling.ct, data = fire2)
+```
+## Proportion of MPB
+```{r, echo=FALSE}
+qplot(prop.bom, data = fire2)
+```
+
+```{r, echo=FALSE}
+qplot(prop.prefire, data = fire2)
+```
+
+## Proportion of Stems with Branches
+
+```{r, echo=FALSE}
+qplot(prop.canopy, data = fire2)
+```
+## Proportion of stems with no Canopy
+```{r, echo=FALSE}
+qplot(prop.nocanopy, data = fire2)
+```
+## Proportion of stems with open cones
+```{r, echo=FALSE}
+qplot(prop.opencone, data = fire2)
+```
+## Proportion of stems with closed cones
+```{r, echo=FALSE}
+qplot(prop.closedcone, data = fire2)
+```
+## Proportion of of cones per stems
+```{r, echo=FALSE}
+qplot(prop.cone.ct, data = fire2)
+```
+
+## Cones per stems by seedlings with fire type
+```{r, echo=FALSE}
+qplot(y= seedling.ct, x= prop.cone.ct, color = fire.type, data = fire2)
+```
+
+```{r, echo=FALSE}
+ggpairs( dplyr::select(fire2, prop.bom, prop.canopy, prop.opencone, prop.cone.ct),
+         upper = list(continuous = wrap("cor", size = 7) ) )
+```
+
+## Snag Fall
+```{r, echo=FALSE}
+qplot(prop.pfcwd, data = cwddata)
+```
+
+```{r, echo=FALSE}
+qplot(x = prop.pfcwd, y = seedling.ct, data = cwddata)
+```
+
+# Analyses
+
+Due to the relatively small sample size, multipe analyses were run to evaluate the drivers of seedling recruitment across a gradient of fire severity.
+
+## MODEL: CONE ABUNDANCE
+```{r}
+fit4 = glm.nb(seedling.ct ~ prop.cone.ct*fire.type + offset(log(seedling.area)), data = fire2)
+```
+
+### Residuals 
+```{r, include=FALSE}
+fit4.res = simulateResiduals(fittedModel = fit4, n = 500)
+fit4.res$scaledResiduals
+```
+
+In the plot below we are looking for the points in the QQ plot to fall along the RED linen. In the Residuals vs.predicted plot were are looking for the lines to be relatively horizontal. All looks good. 
+
+```{r, echo=FALSE}
+plot(fit4.res)
+```
+
+The qq plot on the left seems ok with no singnificant deviations from the line.
+
+In the plot on the right the residuals vs predicted the lines are not horizontal. It seems like there is a lack of data in the quantile ranges making the lines non-horizontal. 
+
+```{r, echo=FALSE}
+testDispersion(fit4.res)
+```
+
+### Drop in deviance
+
+Testing the interaction term in the statistical model. 
+
+```{r}
+fit.firetype = update(fit4, . ~ . - fire.type)
+anova(fit4, fit.firetype)
+```
+
+### Summary 
+
+```{r}
+summary(fit4)
+```
+
+### Estimates and CI
+(exponentiate back to theoriginal scale)
+```{r}
+( est = cbind(Estimate = coef(fit4), confint(fit4)))
+( exp(est))
+```
+**Interpretation of results**
+- cone:surf has a coeffcient of 0.026, p=0.011495. THis means that for a one-unit increase in cones, the expected log count of seedlings increases by 0.026. So for a change in 10 cones per stem seedling counts are estimated to increase by 30% [exp(10*0.026)=1.29693]
+- cones:sev.surf has a coeffcient of 0.013, p=0.185252. This means that a one-unit increase in cones produces variable results that increase or decrease.
+- cone:crown has a coeffcient of -0.017, p=0.050349. This means that for a one-unit increase in cones, the expected log count of seedlings decreases by 0.017. So for a change of 10 cones per stem seedling counts decline by 16% [exp(10*-0.017)=0.84]
+
+### Predicted Data for Figure
+
+```{r}
+preddat.cone40 = data.frame(prop.cone.ct = fire2$prop.cone.ct, fire.type = fire2$fire.type, seedling.area = 100)
+
+head(preddat.cone40)
+
+predcone40 = predict(fit4, newdata = preddat.cone40, se.fit = TRUE)
+
+ULcone40 = with(predcone40, fit + 2*se.fit)
+LLcone40 = with(predcone40, fit - 2*se.fit)
+
+fire2 = mutate(fire2, predcone40 = exp(predcone40$fit), 
+               ULcone40 = exp(ULcone40), 
+               LLcone40 = exp(LLcone40), 
+               seedling.area = 100)
+```
+
+### Manuscript Figure: cone abudance by fire type
+This figure is based on the predicted data generated above. We held prop.canopy constant at its mean and the prop.cones was also held constant at its mean. We did this because the number of cones per stem was the only statistically meaninful variable in this analysis
+
+
+```{r}
+cones40 = ggplot(data = fire2, aes(x = prop.cone.ct, y = seedling.ct, color = factor(fire.type) )) + 
+    geom_line(aes(y = predcone40, color = factor(fire.type)), linetype = 1, size = 2) + 
+        scale_color_manual(values=c("#f03b20", "#feb24c", "#91cf60")) + 
+    ylab("Seedling count") +
+    xlab("Mean cones per tree")  +
+    theme_bw() +
+    theme(legend.position = "none") +
+  theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.5, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) 
+
+cones41 = cones40 + 
+        geom_line(aes(y=LLcone40, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+        geom_line(aes(y=ULcone40, color = factor(fire.type)), linetype='longdash', size = 1)  
+
+( cones42 = cones41 + 
+  geom_ribbon(aes(ymin=LLcone40, ymax=ULcone40, fill= fire.type), linetype = 0, alpha=.25) +
+    scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60")) )
+
+```
+
+### Supplement Figure: Raw data + Facet 
+```{r}
+cones50 = ggplot(data = fire2, aes(x = prop.cone.ct, y = seedling.ct, color = factor(fire.type) )) + 
+  geom_point(size = 2) + 
+    geom_line(aes(y = predcone40, color = factor(fire.type)), linetype = 1, size = 2) + 
+        scale_color_manual(values=c("#f03b20", "#feb24c", "#91cf60")) + 
+    ylab("Seedling count") +
+    xlab("Mean cones per tree")  +
+    theme_bw() +
+    theme(legend.position = "none") +
+  theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.5, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) 
+
+cones51 = cones50 + 
+        geom_line(aes(y=LLcone40, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+        geom_line(aes(y=ULcone40, color = factor(fire.type)), linetype='longdash', size = 1)  
+
+cones52 = cones51 + 
+  geom_ribbon(aes(ymin=LLcone40, ymax=ULcone40, fill= fire.type), linetype = 0, alpha=.25) +
+    scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60")) 
+
+( cones53 = cones52 + facet_wrap(.~fire.type, scales="free") +  
+  theme(strip.background = element_blank(),
+  strip.text.x = element_blank()) )
+
+```
+
+
+## MODEL: BRANCH STRUCTURE
+```{r}
+fit50 = glm.nb(seedling.ct ~ prop.canopy*fire.type + offset(log(seedling.area)), data = fire2)
+```
+
+### Residuals 
+
+```{r, include=FALSE}
+fit50.res = simulateResiduals(fittedModel = fit50, n = 250)
+fit50.res$scaledResiduals
+```
+
+In the plot below we are looking for the points in the QQ plot to fall along the RED linen. In the Residuals vs.predicted plot were are looking for the lines to be relatively horizontal. All looks good. 
+
+```{r, echo=FALSE}
+plot(fit50.res)
+```
+
+The qq plot on the left seems ok with no singnificant deviations from the line.
+
+In the plot on the right the residuals vs predicted the lines are not horizontal. It seems like there is a lack of data in the quantile ranges making the lines non-horizontal. should I try removing the outliers around 150 predicted?
+
+```{r}
+testDispersion(fit50.res)
+```
+
+### Summary (exponentiate back to the original scale)
+```{r}
+summary(fit50)
+```
+
+
+### Estimates & CI
+(exponentiate back to the original scale)
+```{r}
+( est = cbind(Estimate = coef(fit50), confint(fit50)))
+( exp(est))
+```
+
+**Interpretation of results**
+
+* Because our explanatory variable, proportion of trees with branches, a proportion, a one-unit change is the full proportion, 1.00. We need to do some math to look at what the relationship is when there is only 0.5 trees with branches.
+* Branch:crown has a coeffcient of -1.9185, p=0.0671. This means that for a one-unit in the proportion of trees with branches, the expected log count of seedlings decreases by 1.92. So when 50% of the trees have branches (proportion 0.50 trees) seedling counts are estimated to decrease by 62% [exp(0.5*-1.92)=0.3828929]
+* Branch:sev.surf has a coeffcient of 1.81, p=0.1757. This means that a one-unit increase proportion of trees with branches, the expected log count of seedlings decreases by 1.81. So when 50% of the trees have branches (proportion 0.50 trees) seedling counts are estimated to increase by twofold [exp(0.5*1.81)=2.47].
+* Branch:surface has a coeffcient of 6.5387, p=0.0037. This means that for a one-unit increase in cones, the expected log count of seedlings increases by 6.5. This means that a one-unit increase proportion of trees with branches, the expected log count of seedlings increase by 6.5. So when 50% of the trees have branches (proportion 0.50 trees) seedling counts are estimated to increase by [exp(0.5*6.5)=25.79]. This Number does not make sense!!!.
+
+### Predicted Data for Figure
+
+```{r}
+preddat.branch50 = data.frame(prop.canopy = fire2$prop.canopy, fire.type = fire2$fire.type, seedling.area = 100)
+
+head(preddat.branch50)
+
+predbranch50 = predict(fit50, newdata = preddat.branch50, se.fit = TRUE)
+
+ULbranch50 = with(predbranch50, fit + 2*se.fit)
+LLbranch50 = with(predbranch50, fit - 2*se.fit)
+
+fire2 = mutate(fire2, predbranch50 = exp(predbranch50$fit), 
+               ULbranch50 = exp(ULbranch50), 
+               LLbranch50 = exp(LLbranch50), 
+               seedling.area = 100)
+```
+
+### Manusrcipt Figure: branch by fire type
+This figure is based on the predicted data generated above. We held prop.canopy constant at its mean and the prop.cones was also held constant at its mean. We did this because the number of cones per stem was the only statistically meaninful variable in this analysis
+
+
+```{r}
+branch50 = ggplot(data = fire2, aes(x = prop.canopy, y = seedling.ct, color = factor(fire.type) )) + 
+    geom_line(aes(y = predbranch50, color = factor(fire.type)), linetype = 1, size = 2) + 
+        scale_color_manual(values=c("#f03b20", "#feb24c", "#91cf60")) + 
+    ylab("Seedling count") +
+    xlab("Proportion of trees with branches")  +
+    theme_bw() +
+    theme(legend.position = "none") +
+  theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.05, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) 
+
+branch51 = branch50 + 
+        geom_line(aes(y=LLbranch50, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+        geom_line(aes(y=ULbranch50, color = factor(fire.type)), linetype='longdash', size = 1)  
+
+( branch52 = branch51 + 
+  geom_ribbon(aes(ymin=LLbranch50, ymax=ULbranch50, fill= fire.type), linetype = 0, alpha=.25) +
+    scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60")) +  ylim(0, 300)  )
+
+```
+
+### Supplement Figure: Raw data + Facet 
+```{r}
+
+branch60 = ggplot(data = fire2, aes(x = prop.canopy, y = seedling.ct, color = factor(fire.type) )) + 
+  geom_point(size=2) +
+    geom_line(aes(y = predbranch50, color = factor(fire.type)), linetype = 1, size = 2) + 
+        scale_color_manual(values=c("#f03b20", "#feb24c", "#91cf60")) + 
+    ylab("Seedling count") +
+    xlab("Proportion of trees with branches")  +
+    theme_bw() +
+    theme(legend.position = "none") +
+  theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.05, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) 
+
+branch61 = branch60 + 
+        geom_line(aes(y=LLbranch50, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+        geom_line(aes(y=ULbranch50, color = factor(fire.type)), linetype='longdash', size = 1)  
+
+branch62 = branch61 + 
+  geom_ribbon(aes(ymin=LLbranch50, ymax=ULbranch50, fill= fire.type), linetype = 0, alpha=.25) +
+    scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60")) +
+  theme_bw() +
+    theme(legend.position = "none") +
+    theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.5, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) 
+
+( branch63 = branch62 + facet_wrap(.~fire.type, scales="free") +
+    theme(
+  strip.background = element_blank(),
+  strip.text.x = element_blank()
+) )
+```
+
+
+
+## MODEL: OPEN CONES (proportion)
+```{r}
+fitopen1 = glm.nb(seedling.ct ~ prop.opencone * fire.type + offset(log(seedling.area)), data = fire2)
+```
+
+### Residuals 
+
+```{r, include=FALSE}
+fitopen1.res = simulateResiduals(fittedModel = fitopen1, n = 250)
+fitopen1.res$scaledResiduals
+```
+
+In the plot below we are looking for the points in the QQ plot to fall along the RED linen. In the Residuals vs.predicted plot were are looking for the lines to be relatively horizontal. All looks good. 
+
+```{r, echo=FALSE}
+plot(fitopen1.res)
+```
+
+The qq plot on the left seems ok with no singnificant deviations from the line.
+
+In the plot on the right the residuals vs predicted the lines are not horizontal. It seems like there is a lack of data in the quantile ranges making the lines non-horizontal. should I try removing the outliers around 150 predicted?
+
+```{r}
+testDispersion(fitopen1.res)
+```
+
+### Summary 
+```{r}
+summary(fitopen1)
+```
+
+
+### Estimates & CI
+exponentiate back to the original scale)
+```{r}
+( est = cbind(Estimate = coef(fitopen1), confint(fitopen1)))
+( exp(est))
+```
+
+### Predicted Data for Figure
+```{r}
+preddat.fitopen1 = data.frame(prop.opencone = fire2$prop.opencone, fire.type = fire2$fire.type, seedling.area = 100)
+
+head(preddat.fitopen1)
+
+predopen1 = predict(fitopen1, newdata = preddat.fitopen1, se.fit = TRUE)
+
+ULopen1 = with(predopen1, fit + 2*se.fit)
+LLopen1 = with(predopen1, fit - 2*se.fit)
+
+fire2 = mutate(fire2, predopen1 = exp(predopen1$fit), 
+               ULopen1 = exp(ULopen1), 
+               LLopen1 = exp(LLopen1), 
+               seedling.area = 100)
+```
+
+### Manuscript Figure: open cones by fire type
+This figure is based on the predicted data generated above. We held prop.canopy constant at its mean and the prop.cones was also held constant at its mean. We did this because the number of cones per stem was the only statistically meaninful variable in this analysis
+
+
+```{r}
+graphopen1 = ggplot(data = fire2, aes(x = prop.opencone, y = seedling.ct, color = factor(fire.type) )) + 
+    geom_line(aes(y = predopen1, color = factor(fire.type)), linetype = 1, size = 2) + 
+        scale_color_manual(values=c("#f03b20", "#feb24c", "#91cf60")) + 
+    ylab("Seedling count") +
+    xlab("Proportion of trees w/ open cones")  +
+    theme_bw() +
+    theme(legend.position = "none") +
+  theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) 
+
+graphopen2 = graphopen1 + 
+        geom_line(aes(y=LLopen1, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+        geom_line(aes(y=ULopen1, color = factor(fire.type)), linetype='longdash', size = 1)  
+
+( graphopen3 = graphopen2 + 
+  geom_ribbon(aes(ymin=LLopen1, ymax=ULopen1, fill= fire.type), linetype = 0, alpha=.25) +
+    scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60")) +  ylim(0, 300)  )
+
+```
+
+### Supplemental Figure: Raw data + Facet 
+```{r}
+graphopen11 = ggplot(data = fire2, aes(x = prop.opencone, y = seedling.ct, color = factor(fire.type) )) + 
+  geom_point(size=2) +
+    geom_line(aes(y = predopen1, color = factor(fire.type)), linetype = 1, size = 2) + 
+        scale_color_manual(values=c("#f03b20", "#feb24c", "#91cf60")) + 
+    ylab("Seedling count") +
+    xlab("Proportion of trees w/ open cones")  +
+    theme_bw() +
+    theme(legend.position = "none") +
+  theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.5, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) 
+
+graphopen12 = graphopen11 + 
+        geom_line(aes(y=LLopen1, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+        geom_line(aes(y=ULopen1, color = factor(fire.type)), linetype='longdash', size = 1)  
+graphopen13 = graphopen12 + 
+  geom_ribbon(aes(ymin=LLopen1, ymax=ULopen1, fill= fire.type), linetype = 0, alpha=.25) +
+    scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60")) 
+
+( graphopen14 = graphopen13 + facet_wrap(.~fire.type, scales="free") +
+    theme(
+  strip.background = element_blank(),
+  strip.text.x = element_blank()
+))
+```
+
+## MODEL: MPB (proportion)
+```{r}
+fitbeetlefire21 = glm.nb(seedling.ct ~ prop.bom*fire.type + offset(log(seedling.area)), data = fire2)
+```
+
+### Residuals 
+
+```{r, include=FALSE}
+fitbeetlefire21.res = simulateResiduals(fittedModel = fitbeetlefire21, n = 500)
+fitbeetlefire21.res$scaledResiduals
+```
+
+In the plot below we are looking for the points in the QQ plot to fall along the RED linen. In the Residuals vs.predicted plot were are looking for the lines to be relatively horizontal. All looks good. 
+
+```{r, echo=FALSE}
+plot(fitbeetlefire21.res)
+```
+
+QQ plot seems ok, with no significant deviations from the line.  The resdual vs predicted are ? all over the place, I am not sure what to think????
+
+
+```{r}
+testDispersion(fitbeetlefire21.res)
+```
+
+### Summary 
+```{r}
+summary(fitbeetlefire21)
+```
+
+### Estimate and CI
+exponentiate back to the original scale)
+```{r}
+( fitbeetlefire21.est = cbind(Estimate = coef(fitbeetlefire21), confint(fitbeetlefire21)) )
+( exp(fitbeetlefire21.est))
+```
+
+**Interpretation of results**
+- Because our explanatory variable, proportion of trees with branches, s a proportion, a one-unit change is the full proportion, 1.00. We need to do some math to look at what the relationship is when there is only 0.5 trees with branches.
+- BOM:crown has a coeffcient of -1.938, p=0.00179. This means that for a one-unit change in the  proportion of beetle-killed trees, the expected log count of seedlings decreases by 1.94. So when 50% of the trees have been beetle-killed (proportion 0.50 trees) seedling counts are estimated to decrease by 62% [exp(0.5*-1.94)=0.379]; 75% mortality seedlings decline by 77% [exp(0.75x-1.94)=0.2334]; and 100% mortality deline of 86%
+- BOM:sev.surf has a coeffcient of 2.83, p=0.00379. This means that a one-unit increase proportion of beetle-killed trees, the expected log count of seedlings decreases by 1.81. So when 50% mortality (proportion 0.50 trees) seedling counts are estimated to increase by four fold [exp(0.5x2.83)=4.11]; 75% mortality seedlings estimated to increase eight fold [exp(0.75x2.83)=8.35]; 100% mortality seedlings estimated to increase 16 fold. 
+- BOM:surface has a coeffcient of 2.99, p=0.02056. This means that for a one-unit change in the of proportion of beetle-killed trees, the expected log count of seedlings increases by 2.99. So when 50% of the trees have been beetle-killed (proportion 0.50 trees) seedling counts are estimated to increase by four fold [exp(0.5x2.99)=4.459]; 75% mortality seedlings counts are estimated to increase by four fold [exp(0.75x-1.94)=0.2334]; and 100% mortality deline of 86%
+
+### Predict Data for figure: Beetle Outbreak
+The model: fitbeetlefire21 = glm.nb(seedling.ct ~ fire.type * prop.bom + offset(log(seedling.area)), data = fire2)
+
+```{r}
+preddat.bom21 = data.frame(prop.bom = fire2$prop.bom, fire.type = factor(fire2$fire.type), seedling.area = 100)
+
+head(preddat.bom21)
+
+predbom21 = predict(fitbeetlefire21, newdata = preddat.bom21, se.fit = TRUE)
+
+ULbom21 = with(predbom21, fit + 1.96*se.fit)
+LLbom21 = with(predbom21, fit - 1.96*se.fit)
+
+fire2 = mutate(fire2, predbom21 = exp(predbom21$fit), 
+               ULbom21 = exp(ULbom21), 
+               LLbom21 = exp(LLbom21), 
+               seedling.area = 100)
+
+```
+
+### Manuscript Figure: BEETLE OUTBREAK fire interact (Color, Ribbon, legend)
+```{r}
+outbreak1 = ggplot(data = fire2, aes(x = prop.bom, y = seedling.ct, color = factor(fire.type) )) +
+  geom_line(aes(y=LLbom21, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+        geom_line(aes(y=ULbom21, color = factor(fire.type)), linetype='longdash', size = 1) +
+    scale_linetype(guide = "none") 
+
+outbreak2 = outbreak1 + 
+  geom_ribbon(aes(ymin=LLbom21, ymax=ULbom21, fill= fire.type), linetype = 0, alpha=.25, show.legend = FALSE) + scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60"), guide = FALSE) + ylim(0, 300) 
+
+( outbreak3 = outbreak2 +  geom_line(aes(y = predbom21, color = factor(fire.type)), linetype = 1, size = 2) + 
+         scale_color_manual(values = c("#f03b20", "#feb24c", "#91cf60"), name="Fire Severity",
+                         breaks=c("crown", "sev.surf", "surface"),
+                         labels=c("High Severity Crown", "High Severity Surface", "Low Severity Surface")) + 
+    ylab("Seedling count") +
+    xlab("Proportion of MPB-killed trees")  +
+    theme_bw() +
+    theme(legend.position = "none") +
+    theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.5, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) )
+```
+
+### Supplement Figure: Raw data + Facet 
+```{r}
+outbreak11 = ggplot(data = fire2, aes(x = prop.bom, y = seedling.ct, color = factor(fire.type) )) +
+  geom_point(size=2) + 
+  geom_line(aes(y=LLbom21, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+        geom_line(aes(y=ULbom21, color = factor(fire.type)), linetype='longdash', size = 1) +
+    scale_linetype(guide = "none") 
+
+outbreak12 = outbreak11 + 
+  geom_ribbon(aes(ymin=LLbom21, ymax=ULbom21, fill= fire.type), linetype = 0, alpha=.25, show.legend = FALSE) + scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60"), guide = FALSE) + ylim(0, 300) 
+
+outbreak13 = outbreak12 +  geom_line(aes(y = predbom21, color = factor(fire.type)), linetype = 1, size = 2) + 
+         scale_color_manual(values = c("#f03b20", "#feb24c", "#91cf60"), name="Fire Severity",
+                         breaks=c("crown", "sev.surf", "surface"),
+                         labels=c("High Severity Crown", "High Severity Surface", "Low Severity Surface")) + 
+    ylab("Seedling count") +
+    xlab("Proportion of MPB-killed trees")  +
+    theme_bw() +
+    theme(legend.position = "none") +
+    theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.5, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) 
+
+( graphopen14 = graphopen13 + facet_wrap(.~fire.type, scales="free") +
+    theme(strip.background = element_blank(),
+  strip.text.x = element_blank()) )
+```
+
+### Legend for Cowplot
+```{r}
+legend1 = ggplot(data = fire2, aes(x = prop.bom, y = seedling.ct, color = factor(fire.type) )) + geom_line(aes(y=LLbom21, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+        geom_line(aes(y=ULbom21, color = factor(fire.type)), linetype='longdash', size = 1) +
+    scale_linetype(guide = "none") 
+
+legend2 = legend1 + 
+  geom_ribbon(aes(ymin=LLbom21, ymax=ULbom21, fill= fire.type), linetype = 0, alpha=.25, show.legend = FALSE) + scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60"), guide = FALSE) + ylim(0, 300) 
+
+legend3 = legend2 +  geom_line(aes(y = predbom21, color = factor(fire.type)), linetype = 1, size = 2) + 
+         scale_color_manual(values = c("#f03b20", "#feb24c", "#91cf60"), name="Fire Severity",
+                         breaks=c("crown", "sev.surf", "surface"),
+                         labels=c("Crown", "Severe Surface", "Light Surface")) + 
+    ylab("Seedling count") +
+    xlab("Proportion of beetle-killed trees")  +
+    theme_bw() +
+    theme(legend.title = element_text(size = 10), legend.position = "bottom") +
+    theme(axis.title.x = element_text(size = 10, hjust = 0.5, vjust = -0.3),
+        axis.title.y = element_text(size = 10, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black"))
+```
+
+
+## MODEL: BARK BEETLES (Proportion Prefire mortality) 
+```{r}
+fitprefirefire21 = glm.nb(seedling.ct ~ prop.prefire*fire.type + offset(log(seedling.area)), data = fire2)
+```
+
+### Residuals 
+
+```{r, include=FALSE}
+fitprefirefire21.res = simulateResiduals(fittedModel = fitprefirefire21, n = 500)
+fitprefirefire21.res$scaledResiduals
+```
+
+In the plot below we are looking for the points in the QQ plot to fall along the RED linen. In the Residuals vs.predicted plot were are looking for the lines to be relatively horizontal. All looks good. 
+
+```{r, echo=FALSE}
+plot(fitprefirefire21.res)
+```
+
+QQ plot seems ok, with no significant deviations from the line.  The resdual vs predicted are ? all over the place, I am not sure what to think????
+
+```{r}
+testDispersion(fitprefirefire21.res)
+```
+
+### Summary 
+```{r}
+summary(fitprefirefire21)
+```
+
+### Estimates and CI
+exponentiate back to the original scale)
+```{r}
+( fitprefirefire21.est = cbind(Estimate = coef(fitprefirefire21), confint(fitprefirefire21)) )
+( exp(fitprefirefire21.est))
+```
+
+**Interpretation of results**
+- Because our explanatory variable, proportion of trees with branches, s a proportion, a one-unit change is the full proportion, 1.00. We need to do some math to look at what the relationship is when there is only 0.5 trees with branches.
+- BOM:crown has a coeffcient of -1.938, p=0.00179. This means that for a one-unit change in the  proportion of beetle-killed trees, the expected log count of seedlings decreases by 1.94. So when 50% of the trees have been beetle-killed (proportion 0.50 trees) seedling counts are estimated to decrease by 62% [exp(0.5*-1.94)=0.379]; 75% mortality seedlings decline by 77% [exp(0.75x-1.94)=0.2334]; and 100% mortality deline of 86%
+- BOM:sev.surf has a coeffcient of 2.83, p=0.00379. This means that a one-unit increase proportion of beetle-killed trees, the expected log count of seedlings decreases by 1.81. So when 50% mortality (proportion 0.50 trees) seedling counts are estimated to increase by four fold [exp(0.5x2.83)=4.11]; 75% mortality seedlings estimated to increase eight fold [exp(0.75x2.83)=8.35]; 100% mortality seedlings estimated to increase 16 fold. 
+- BOM:surface has a coeffcient of 2.99, p=0.02056. This means that for a one-unit change in the of proportion of beetle-killed trees, the expected log count of seedlings increases by 2.99. So when 50% of the trees have been beetle-killed (proportion 0.50 trees) seedling counts are estimated to increase by four fold [exp(0.5x2.99)=4.459]; 75% mortality seedlings counts are estimated to increase by four fold [exp(0.75x-1.94)=0.2334]; and 100% mortality deline of 86%
+
+### Predict Data for figure: Beetle Outbreak
+The model: fitbeetlefire21 = glm.nb(seedling.ct ~ fire.type * prop.bom + offset(log(seedling.area)), data = fire2)
+
+```{r}
+preddat.prefire21 = data.frame(prop.prefire = fire2$prop.prefire, fire.type = factor(fire2$fire.type), seedling.area = 100)
+
+head(preddat.prefire21)
+
+predprefire21 = predict(fitprefirefire21, newdata = preddat.prefire21, se.fit = TRUE)
+
+ULprefire21 = with(predprefire21, fit + 1.96*se.fit)
+LLprefire21 = with(predprefire21, fit - 1.96*se.fit)
+
+fire2 = mutate(fire2, predprefire21 = exp(predprefire21$fit), 
+               ULprefire21 = exp(ULprefire21), 
+               LLprefire21 = exp(LLprefire21), 
+               seedling.area = 100)
+
+```
+
+### Manuscript Figure: Prefire fire interact (Color, Ribbon, no legend)
+```{r}
+prefire1 = ggplot(data = fire2, aes(x = prop.prefire, y = seedling.ct, color = factor(fire.type) )) + 
+  geom_line(aes(y=LLprefire21, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+        geom_line(aes(y=ULprefire21, color = factor(fire.type)), linetype='longdash', size = 1) +
+    scale_linetype(guide = "none") 
+
+prefire2 = prefire1 + 
+  geom_ribbon(aes(ymin=LLprefire21, ymax=ULprefire21, fill= fire.type), linetype = 0, alpha=.25, show.legend = FALSE) + scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60"), guide = FALSE) + ylim(0, 300) 
+
+( prefire3 = prefire2 + geom_line(aes(y = predprefire21, color = factor(fire.type)), linetype = 1, size = 2) + 
+         scale_color_manual(values = c("#f03b20", "#feb24c", "#91cf60"), name="Fire Severity",
+                         breaks=c("crown", "sev.surf", "surface"),
+                         labels=c("High Severity Crown", "High Severity Surface", "Low Severity Surface")) + 
+    ylab("Seedling count") +
+    xlab("Proportion of prefire-killed trees")  +
+    theme_bw() +
+    theme(legend.position = "none") +
+    theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.5, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) )
+```
+
+### Supplement Figure: Raw data + Facet 
+```{r}
+
+prefire11 = ggplot(data = fire2, aes(x = prop.prefire, y = seedling.ct, color = factor(fire.type) )) + 
+  geom_point(size=2) +
+  geom_line(aes(y=LLprefire21, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+        geom_line(aes(y=ULprefire21, color = factor(fire.type)), linetype='longdash', size = 1) +
+    scale_linetype(guide = "none") 
+
+prefire12 = prefire11 + 
+  geom_ribbon(aes(ymin=LLprefire21, ymax=ULprefire21, fill= fire.type), linetype = 0, alpha=.25, show.legend = FALSE) + scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60"), guide = FALSE) 
+
+prefire13 = prefire12 + geom_line(aes(y = predprefire21, color = factor(fire.type)), linetype = 1, size = 2) + 
+         scale_color_manual(values = c("#f03b20", "#feb24c", "#91cf60"), name="Fire Severity",
+                         breaks=c("crown", "sev.surf", "surface"),
+                         labels=c("High Severity Crown", "High Severity Surface", "Low Severity Surface")) + 
+    ylab("Seedling count") +
+    xlab("Proportion of prefire-killed trees")  +
+    theme_bw() +
+    theme(legend.position = "none") +
+    theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.5, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) 
+
+( prefire14 = prefire13 + facet_wrap(.~fire.type, scales="free") + 
+    theme(strip.background = element_blank(),
+  strip.text.x = element_blank()) )
+```
+
+## MODEL: EXPOSED SOIL 
+```{r}
+fitsoil12 = glm.nb(seedling.ct ~ prop.soil*fire.type + offset(log(seedling.area)), data = fire2)
+```
+
+### Residuals 
+
+```{r, include=FALSE}
+fitsoil12.res = simulateResiduals(fittedModel = fitsoil12, n = 250)
+fitsoil12.res$scaledResiduals
+fitsoil12.res$scaledResidualsNormal
+```
+
+In the plot below we are looking for the points in the QQ plot to fall along the RED linen. In the Residuals vs.predicted plot were are looking for the lines to be relatively horizontal. All looks good. 
+
+```{r, echo=FALSE}
+plot(fitsoil12.res)
+```
+The QQ Plot seems ok with no significant deviations from the line.
+
+The plot on the right residual vs predicted seems to be lacking data in the range of the quantiles, which may be why the lines are not horizontal?
+
+```{r}
+testDispersion(fitsoil12.res)
+```
+
+### Summary
+```{r}
+summary(fitsoil12)
+```
+
+**The variable prop.soil has a coefficient of -2.53, which is statistically significant. This means that for each one-unit increase in prop.soil, the expected log count of seedlings decreases by 2.53.**
+
+**The indicator variable shown as fire.typesev.surf is the expected difference in log count between group 2 (sever-surface) and the reference group (crown). The expected log count for group 2 is -0.09 lower than the expected log count for group 1. The indicator variable for fire.typesurface is the expected difference in log count between group 3 and the reference group.The expected log count for group 3 of fire.type is -0.93 lower than the expected log count for level 1. To determine if fire.type itself, overall, is statistically significant, we can compare a model with and without fire tye with a drop in deviance test. **
+
+#### Estimates and CI
+exponentiate back to the original scale)
+```{r}
+( fitsoil12.est = cbind(Estimate = coef(fitsoil12), confint(fitsoil12)))
+( exp(fitsoil12.est))
+```
+
+### Predicted data for figure: Soil
+The model is :
+fitsoil12 = glm.nb(seedling.ct ~ prop.soil * fire.type + offset(log(seedling.area)), data = fire2)
+
+
+```{r}
+preddat.soil12 = data.frame(prop.soil = fire2$prop.soil, fire.type = fire2$fire.type, seedling.area = 100)
+
+head(preddat.soil12)
+
+predsoil12 = predict(fitsoil12, newdata = preddat.soil12, se.fit = TRUE)
+
+ULsoil12 = with(predsoil12, fit + 2*se.fit)
+LLsoil12 = with(predsoil12, fit - 2*se.fit)
+
+fire2 = mutate(fire2, predsoil12 = exp(predsoil12$fit), 
+               ULsoil12 = exp(ULsoil12), 
+               LLsoil12 = exp(LLsoil12), 
+               seedling.area = 100)
+```
+
+### Manuscript Figure:  SOIL (Color, RIbbon, no Legend)
+```{r}
+soil12 = ggplot(data = fire2, aes(x = prop.soil, y = seedling.ct, color = factor(fire.type) )) + 
+    geom_line(aes(y = predsoil12, color = factor(fire.type)), linetype = 1, size = 2) + 
+        scale_color_manual(values=c("#f03b20", "#feb24c", "#91cf60")) + 
+    ylab("Seedling count") +
+    xlab("Proportion of exposed soil")  +
+    theme_bw() +
+    theme(legend.position = "none")
+
+
+soil13 = soil12 + 
+        geom_line(aes(y=LLsoil12, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+        geom_line(aes(y=ULsoil12, color = factor(fire.type)), linetype='longdash', size = 1)  
+
+(soil14 = soil13 + 
+  geom_ribbon(aes(ymin=LLsoil12, ymax=ULsoil12, fill= fire.type), linetype = 0, alpha=.25) +
+    scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60")) +
+    ylim(0, 300) +
+    theme(legend.position = "none") +
+    theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.5, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) ) 
+```
+
+### Supplement Figure: Raw data + Facet 
+```{r}
+soil22 = ggplot(data = fire2, aes(x = prop.soil, y = seedling.ct, color = factor(fire.type) )) + 
+  geom_point(size=2) +
+    geom_line(aes(y = predsoil12, color = factor(fire.type)), linetype = 1, size = 2) + 
+        scale_color_manual(values=c("#f03b20", "#feb24c", "#91cf60")) + 
+    ylab("Seedling count") +
+    xlab("Proportion of exposed soil")  +
+    theme_bw() +
+    theme(legend.position = "none")
+
+
+soil23 = soil22 + 
+        geom_line(aes(y=LLsoil12, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+        geom_line(aes(y=ULsoil12, color = factor(fire.type)), linetype='longdash', size = 1)  
+
+soil24 = soil23 + 
+  geom_ribbon(aes(ymin=LLsoil12, ymax=ULsoil12, fill= fire.type), linetype = 0, alpha=.25) +
+    scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60")) 
+    theme(legend.position = "none") +
+    theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.5, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) 
+
+( soil25 = soil24  + facet_wrap(.~fire.type, scales="free") + 
+    theme(strip.background = element_blank(),
+  strip.text.x = element_blank()))
+```
+
+
+## MODEL: SNAG FALL
+```{r CWD*Fire-Model}
+fitcwd2 = glm.nb(seedling.ct ~ prop.pfcwd*fire.type + offset(log(seedling.area)), data = cwddata)
+```
+
+### Residuals
+
+```{r cwd*fire-residuals, include=FALSE}
+fitcwd2.res = simulateResiduals(fittedModel = fitcwd2, n = 500)
+fitcwd2.res$scaledResiduals
+```
+
+In the plot below we are looking for the points in the QQ plot to fall along the RED linen. In the Residuals vs.predicted plot were are looking for the lines to be relatively horizontal. All looks good. 
+
+```{r cwd*fire-residplot, echo=FALSE}
+plot(fitcwd2.res)
+```
+
+QQ plot seems ok, with no significant deviations from the line.  The resdual vs predicted are ? all over the place, I am not sure what to think????
+
+```{r cwd*fire-overdispersion}
+testDispersion(fitcwd2.res)
+```
+
+### Summary 
+```{r cwd*fire-summary}
+summary(fitcwd2)
+```
+
+#### estimates and CI
+exponentiate back to the original scale)
+```{r cwd*fire-estimates}
+( fitcwd2.est = cbind(Estimate = coef(fitcwd2), confint(fitcwd2)) )
+( exp(fitcwd2.est))
+```
+
+**Interpretation of results**
+- Snag fall is a proportion and a 1 unit change would be equivalent to the full proportion of 1.0
+- CWD:crown has a coeffcient of 0.833, p=0.572. 
+- CWD:sev.surf has a coeffcient of -3.42, p=0.071. This means that for a one-unit change in the of proportion of snag-fall, the expected log count of seedlings decreases by -3.42. So when 50% of the trees have been fallen (proportion 0.50 trees) seedling counts are estimated to decrease by 82% [exp(0.5x-3.42)=0.181]; 75% snag fall seedlings counts are estimated to decrease by 92% [exp(0.75x-3.42)=0.0769]; and 100% mortality deline of 97%; and 25% snag fall counts are estimated to decrease by 57% [exp(0.25x-3.42)=0.4253]
+
+### predicted data for figure
+```{r}
+preddat.cwd = data.frame(prop.pfcwd = cwddata$prop.pfcwd, fire.type = cwddata$fire.type, seedling.area = 100)
+
+head(preddat.cwd)
+
+predcwd = predict(fitcwd2, newdata = preddat.cwd, se.fit = TRUE)
+
+ULcwd = with(predcwd, fit + 2*se.fit)
+LLcwd = with(predcwd, fit - 2*se.fit)
+
+cwddata = mutate(cwddata, predcwd = exp(predcwd$fit), 
+               ULcwd = exp(ULcwd), 
+               LLcwd = exp(LLcwd), 
+               seedling.area = 100)
+
+```
+
+### Manuscript Figure: Snag fall 
+```{r}
+cwd10 = ggplot(data = cwddata, aes(x = prop.pfcwd, y = seedling.ct, color = factor(fire.type) )) +     geom_line(aes(y = predcwd, color = factor(fire.type)), linetype = 1, size = 2) + 
+        scale_color_manual(values=c("#f03b20", "#feb24c", "#91cf60")) + 
+    ylab("Seedling count") +
+    xlab("Proportion of snag fall")  +
+    theme_bw() +
+    theme(legend.position = "none") +
+  theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.5, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) 
+
+cwd11 = cwd10 + 
+        geom_line(aes(y=LLcwd, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+        geom_line(aes(y=ULcwd, color = factor(fire.type)), linetype='longdash', size = 1)  
+
+( cwd12 = cwd11 + 
+  geom_ribbon(aes(ymin=LLcwd, ymax=ULcwd, fill= fire.type), linetype = 0, alpha=.25) +
+    scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60")) )
+```
+
+### Supplement Figure: Raw data + Facet 
+```{r}
+cwd20 = ggplot(data = cwddata, aes(x = prop.pfcwd, y = seedling.ct, color = factor(fire.type) )) +
+  geom_point(size=2) +
+  geom_line(aes(y = predcwd, color = factor(fire.type)), linetype = 1, size = 2) + 
+        scale_color_manual(values=c("#f03b20", "#feb24c", "#91cf60")) + 
+    ylab("Seedling count") +
+    xlab("Proportion of snag fall")  +
+    theme_bw() +
+    theme(legend.position = "none") +
+  theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.5, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) 
+
+cwd21 = cwd20 + 
+        geom_line(aes(y=LLcwd, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+        geom_line(aes(y=ULcwd, color = factor(fire.type)), linetype='longdash', size = 1)  
+
+cwd22 = cwd21 + 
+  geom_ribbon(aes(ymin=LLcwd, ymax=ULcwd, fill= fire.type), linetype = 0, alpha=.25) +
+    scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60")) 
+
+( cwd23 = cwd22  + facet_wrap(.~fire.type, scales="free") +
+    theme(strip.background = element_blank(),
+  strip.text.x = element_blank()))
+```
+
+
+# Final Figures
+## Manuscript Figure with astrict
+```{r fig.height=7, fig.width=6}
+legend = cowplot::get_legend(legend3)
+cfgrid16 = cowplot::plot_grid(outbreak3, cones42, cwd12, branch52, soil14, graphopen3,  labels = c("A", "B", "C", "D", "E", "F"), align = "hv", ncol= 2) + 
+  draw_label("*", x = .48, y = .81, size = 20, fontface = "bold") +
+  draw_label("*", x = .48, y = .78, size = 20, fontface = "bold") + 
+  draw_label("*", x = .48, y = .76, size = 20, fontface = "bold") +
+  draw_label("*", x = .98, y = .78, size = 20, fontface = "bold") +
+  draw_label("*", x = .61, y = .78, size = 20, fontface = "bold") +
+  draw_label("*", x = .98, y = .44, size = 20, fontface = "bold") 
+  
+(cfgrid17 = plot_grid(cfgrid16, legend, ncol=1, rel_widths = c(1, .1), rel_heights = c(1, .05)) ) 
+```
+
+```{r eval=FALSE, include=FALSE}
+ggsave("../figs/2019-02-12_burnfactors_all_sig_beetle.jpeg", plot = cfgrid17, width = 6, height = 7, units = c("in"), dpi=600 )
+```
+
+```{r fig.height=7, fig.width=6}
+legend = cowplot::get_legend(legend3)
+cfgrid18 = cowplot::plot_grid(prefire3, cones42, cwd12, branch52, soil14, graphopen3,  labels = c("A", "B", "C", "D", "E", "F"), align = "hv", ncol= 2) + 
+  draw_label("*", x = .98, y = .78, size = 20, fontface = "bold") +
+  draw_label("*", x = .61, y = .78, size = 20, fontface = "bold") +
+  draw_label("*", x = .89, y = .815, size = 20, fontface = "bold") +
+  draw_label("*", x = .98, y = .44, size = 20, fontface = "bold") 
+  
+(cfgrid19 = plot_grid(cfgrid18, legend, ncol=1, rel_widths = c(1, .1), rel_heights = c(1, .05)) ) 
+```
+
+```{r eval=FALSE, include=FALSE}
+ggsave("../figs/2019-02-12_burnfactors_all_sig_prefire.jpeg", plot = cfgrid19, width = 6, height = 7, units = c("in"), dpi=600 )
+```
+
+## Supplementary figure with raw data and facet_wrap
+
+```{r fig.height=7, fig.width=6}
+legend = cowplot::get_legend(legend3)
+cfgrid20 = cowplot::plot_grid(prefire14, cones53, cwd23,  labels = c("A", "B", "C"), align = "hv", ncol= 1)  
+  
+(cfgrid21 = plot_grid(cfgrid20, legend, ncol=1, rel_widths = c(1, .1), rel_heights = c(1, .05)) ) 
+```
+
+```{r eval=FALSE, include=FALSE}
+ggsave("../figs/2019-07-19_burnfactors_supplement1.jpeg", plot = cfgrid21, width = 6, height = 7, units = c("in"), dpi=600 )
+```
+
+```{r fig.height=7, fig.width=6}
+legend = cowplot::get_legend(legend3)
+cfgrid22 = cowplot::plot_grid(branch63, soil25, graphopen14,  labels = c("D", "E", "F"), align = "hv", ncol= 1) 
+  
+(cfgrid23 = plot_grid(cfgrid22, legend, ncol=1, rel_widths = c(1, .1), rel_heights = c(1, .05)) ) 
+```
+```{r eval=FALSE, include=FALSE}
+ggsave("../figs/2019-07-19_burnfactors_supplement2.jpeg", plot = cfgrid23, width = 6, height = 7, units = c("in"), dpi=600 )
+```
+
+**THE END**
