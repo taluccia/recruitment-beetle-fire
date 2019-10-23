@@ -1,0 +1,1246 @@
+---
+title: 'Analyses: Postfire Climate'
+author: "Anna Talucci"
+date: "July 20, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Overview
+
+Rethinking of compounding factors associated with seedling success or failure in a postfire climate.
+
+Climate/weather variables:
+
+* Monthly preciptiation PPT01-PPt12
+* Monthly Number of frost-free days NFFD01-NFFD12
+* Monthly Precipitation as snow PAS01-PAS12
+* Hargreaves climatic moisture deficit (mm) CMD01-CMD12 (CMD)
+
+Climate data runs for the calendar year January through December. Because we are interested in post fire we will compile our own data set from the BC climate monthly variable data. We calculate one year post-fire from Octorber through September.
+
+# Packages
+
+The following Packages are required for the below analyses:
+library(gmodels)
+library(REdaS)
+```{r, message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(MASS)
+library(car)
+library(lme4)
+library(DHARMa)
+library(lsmeans)
+library(RColorBrewer)
+library(cowplot)
+library(mosaic)
+library(DT)
+```
+
+# Organize Climate Data
+
+We will read in data by calendar year, combine, into one data frame, and calculate one-year post-fire values.
+
+## 2016 BC Climate data 
+
+```{r}
+c2016 = read.csv("../data/2016_climate.csv", header=TRUE, sep = ",", strip.white = TRUE)
+head(c2016)
+```
+
+```{r}
+c2016 = c2016 %>%
+   dplyr::select(plot:Longitude, PPT01:PPT12, NFFD01:PAS12, CMD01:CMD12)
+```
+
+```{r}
+names(c2016)[4:53] = c("lat", "long", "PPT01.2016", "PPT02.2016", "PPT03.2016", "PPT04.2016", "PPT05.2016", "PPT06.2016", "PPT07.2016", "PPT08.2016", "PPT09.2016", "PPT10.2016", "PPT11.2016", "PPT12.2016", "NFFD01.2016", "NFFD02.2016", "NFFD03.2016", "NFFD04.2016", "NFFD05.2016", "NFFD06.2016", "NFFD07.2016", "NFFD08.2016", "NFFD09.2016", "NFFD10.2016", "NFFD11.2016", "NFFD12.2016", "PAS01.2016", "PAS02.2016", "PAS03.2016", "PAS04.2016", "PAS05.2016", "PAS06.2016", "PAS07.2016", "PAS08.2016", "PAS09.2016", "PAS10.2016", "PAS11.2016", "PAS12.2016", "CMD01.2016", "CMD02.2016", "CMD03.2016", "CMD04.2016", "CMD05.2016", "CMD06.2016", "CMD07.2016", "CMD08.2016", "CMD09.2016", "CMD10.2016", "CMD11.2016", "CMD12.2016")
+
+head(c2016)
+```
+
+### 2015 BC Climate data 
+
+```{r}
+c2015 = read.csv("../data/2015_climate.csv", header=TRUE, sep = ",", strip.white = TRUE)
+head(c2015)
+```
+
+```{r}
+c2015 = c2015 %>%
+   dplyr::select(plot:Longitude, PPT01:PPT12, NFFD01:PAS12, CMD01:CMD12)
+```
+
+```{r}
+names(c2015)[4:53] = c("lat", "long", "PPT01.2015", "PPT02.2015", "PPT03.2015", "PPT04.2015", "PPT05.2015", "PPT06.2015", "PPT07.2015", "PPT08.2015", "PPT09.2015", "PPT10.2015", "PPT11.2015", "PPT12.2015", "NFFD01.2015", "NFFD02.2015", "NFFD03.2015", "NFFD04.2015", "NFFD05.2015", "NFFD06.2015", "NFFD07.2015", "NFFD08.2015", "NFFD09.2015", "NFFD10.2015", "NFFD11.2015", "NFFD12.2015", "PAS01.2015", "PAS02.2015", "PAS03.2015", "PAS04.2015", "PAS05.2015", "PAS06.2015", "PAS07.2015", "PAS08.2015", "PAS09.2015", "PAS10.2015", "PAS11.2015", "PAS12.2015", "CMD01.2015", "CMD02.2015", "CMD03.2015", "CMD04.2015", "CMD05.2015", "CMD06.2015", "CMD07.2015", "CMD08.2015", "CMD09.2015", "CMD10.2015", "CMD11.2015", "CMD12.2015")
+```
+
+### 2014 BC Climate data 
+```{r}
+c2014 = read.csv("../data/2014_climate.csv", header=TRUE, sep = ",", strip.white = TRUE)
+head(c2014)
+```
+
+```{r}
+c2014 = c2014 %>%
+   dplyr::select(plot:Longitude, PPT01:PPT12, NFFD01:PAS12, CMD01:CMD12)
+```
+
+```{r}
+names(c2014)[4:53] = c("lat", "long", "PPT01.2014", "PPT02.2014", "PPT03.2014", "PPT04.2014", "PPT05.2014", "PPT06.2014", "PPT07.2014", "PPT08.2014", "PPT09.2014", "PPT10.2014", "PPT11.2014", "PPT12.2014", "NFFD01.2014", "NFFD02.2014", "NFFD03.2014", "NFFD04.2014", "NFFD05.2014", "NFFD06.2014", "NFFD07.2014", "NFFD08.2014", "NFFD09.2014", "NFFD10.2014", "NFFD11.2014", "NFFD12.2014", "PAS01.2014", "PAS02.2014", "PAS03.2014", "PAS04.2014", "PAS05.2014", "PAS06.2014", "PAS07.2014", "PAS08.2014", "PAS09.2014", "PAS10.2014", "PAS11.2014", "PAS12.2014", "CMD01.2014", "CMD02.2014", "CMD03.2014", "CMD04.2014", "CMD05.2014", "CMD06.2014", "CMD07.2014", "CMD08.2014", "CMD09.2014", "CMD10.2014", "CMD11.2014", "CMD12.2014")
+```
+
+### 2013 BC Climate data 
+```{r}
+c2013 = read.csv("../data/2013_climate.csv", header=TRUE, sep = ",", strip.white = TRUE)
+head(c2013)
+```
+
+```{r}
+c2013 = c2013 %>%
+   dplyr::select(plot:Longitude, PPT01:PPT12, NFFD01:PAS12, CMD01:CMD12)
+```
+
+```{r}
+names(c2013)[4:53] = c("lat", "long", "PPT01.2013", "PPT02.2013", "PPT03.2013", "PPT04.2013", "PPT05.2013", "PPT06.2013", "PPT07.2013", "PPT08.2013", "PPT09.2013", "PPT10.2013", "PPT11.2013", "PPT12.2013", "NFFD01.2013", "NFFD02.2013", "NFFD03.2013", "NFFD04.2013", "NFFD05.2013", "NFFD06.2013", "NFFD07.2013", "NFFD08.2013", "NFFD09.2013", "NFFD10.2013", "NFFD11.2013", "NFFD12.2013", "PAS01.2013", "PAS02.2013", "PAS03.2013", "PAS04.2013", "PAS05.2013", "PAS06.2013", "PAS07.2013", "PAS08.2013", "PAS09.2013", "PAS10.2013", "PAS11.2013", "PAS12.2013", "CMD01.2013", "CMD02.2013", "CMD03.2013", "CMD04.2013", "CMD05.2013", "CMD06.2013", "CMD07.2013", "CMD08.2013", "CMD09.2013", "CMD10.2013", "CMD11.2013", "CMD12.2013")
+```
+
+### 2012 BC Climate data 
+
+```{r}
+c2012 = read.csv("../data/2012_climate.csv", header=TRUE, sep = ",", strip.white = TRUE)
+head (c2012)
+```
+
+```{r}
+c2012 = c2012 %>%
+   dplyr::select(plot:Longitude, PPT01:PPT12, NFFD01:PAS12, CMD01:CMD12)
+```
+
+```{r}
+names(c2012)[4:53] = c("lat", "long", "PPT01.2012", "PPT02.2012", "PPT03.2012", "PPT04.2012", "PPT05.2012", "PPT06.2012", "PPT07.2012", "PPT08.2012", "PPT09.2012", "PPT10.2012", "PPT11.2012", "PPT12.2012", "NFFD01.2012", "NFFD02.2012", "NFFD03.2012", "NFFD04.2012", "NFFD05.2012", "NFFD06.2012", "NFFD07.2012", "NFFD08.2012", "NFFD09.2012", "NFFD10.2012", "NFFD11.2012", "NFFD12.2012", "PAS01.2012", "PAS02.2012", "PAS03.2012", "PAS04.2012", "PAS05.2012", "PAS06.2012", "PAS07.2012", "PAS08.2012", "PAS09.2012", "PAS10.2012", "PAS11.2012", "PAS12.2012", "CMD01.2012", "CMD02.2012", "CMD03.2012", "CMD04.2012", "CMD05.2012", "CMD06.2012", "CMD07.2012", "CMD08.2012", "CMD09.2012", "CMD10.2012", "CMD11.2012", "CMD12.2012")
+```
+
+### Merge climate data
+```{r}
+climate.1213 = merge(c2012, c2013, by = c("plot", "ID1", "ID2", "lat", "long"))
+head(climate.1213)
+```
+
+```{r}
+climate.1415 = merge(c2014, c2015, by = c("plot", "ID1", "ID2", "lat", "long"))
+head(climate.1415)
+```
+
+
+```{r}
+climate.12131415 = merge(climate.1213, climate.1415, by = c("plot", "ID1", "ID2", "lat", "long"))
+head(climate.12131415)
+```
+
+```{r}
+climate.1213141516 = merge(climate.12131415, c2016, by = c("plot", "ID1", "ID2", "lat", "long"))
+head(climate.1213141516)
+```
+
+### Plot, fire name and fire year
+
+```{r}
+plotindex = read.csv("../data/plotindex_climate.csv", header=TRUE, sep = ",", strip.white = TRUE)
+head(plotindex)
+```
+
+## Merge Fire and climate data
+
+```{r}
+climate.plot = merge(plotindex, climate.1213141516, by = c("plot"))
+head(climate.plot)
+```
+
+delete duplicate rows
+```{r}
+climate.plot = climate.plot %>%
+   dplyr::select(plot:fire.year, lat.y:CMD12.2016)
+head(climate.plot)
+```
+
+Subset by fire
+
+```{r}
+chelaslie = climate.plot %>% 
+    dplyr::filter(fire.event == "chelaslie") 
+```
+
+```{r}
+entiako = climate.plot %>% 
+    dplyr::filter(fire.event == "entiako") 
+```
+
+```{r}
+tweedsmuir = climate.plot %>% 
+    dplyr::filter(fire.event == "tweedsmuir") 
+```
+
+### Calculate variables
+
+Climate/weather variables:
+
+* Monthly preciptiation PPT01-PPt12
+* Monthly Number of frost-free days NFFD01-NFFD12
+* Monthly Precipitation as snow PAS01-PAS12
+* Hargreaves climatic moisture deficit (mm) CMD01-CMD12
+
+#### Variables for Tweedsmuir
+
+Fire burned in 2013 September
+Post fire climate included October 2013 - September 2014
+
+* Average precipitation 1-year post-fire
+* Average frost free days 1-year post-fire
+* Average precipitation as snow 1-year post-fire
+* Average climate moisture deficit 1-year postfire
+
+```{r}
+tweedsmuir = tweedsmuir %>% 
+    mutate(sum_PPT_1314 = (PPT10.2013 + PPT11.2013 + PPT12.2013 + PPT01.2014 + PPT02.2014 + PPT03.2014 + PPT04.2014 + PPT05.2014 + PPT06.2014 + PPT07.2014 + PPT08.2014 + PPT09.2014)) %>%
+    mutate(avg_PPT_1314 = sum_PPT_1314/12) %>%
+    mutate(sum_NFFD_1314 = (NFFD10.2013 + NFFD11.2013 + NFFD12.2013 + NFFD01.2014 + NFFD02.2014 + NFFD03.2014 + NFFD04.2014 + NFFD05.2014 + NFFD06.2014 + NFFD07.2014 + NFFD08.2014 + NFFD09.2014)) %>%
+    mutate(avg_NFFD_1314 = sum_NFFD_1314/12) %>%
+    mutate(sum_PAS_1314 = (PAS10.2013 + PAS11.2013 + PAS12.2013 + PAS01.2014 + PAS02.2014 + PAS03.2014 + PAS04.2014 + PAS05.2014 + PAS06.2014 + PAS07.2014 + PAS08.2014 + PAS09.2014)) %>%
+    mutate(avg_PAS_1314 = sum_PAS_1314/12) %>%
+     mutate(sum_CMD_1314 = (CMD10.2013 + CMD11.2013 + CMD12.2013 + CMD01.2014 + CMD02.2014 + CMD03.2014 + CMD04.2014 + CMD05.2014 + CMD06.2014 + CMD07.2014 + CMD08.2014 + CMD09.2014)) %>%
+    mutate(avg_CMD_1314 = sum_CMD_1314/12)  
+```
+
+```{r}
+tweedsmuir = tweedsmuir %>%
+    dplyr::select(plot:long.y, sum_PPT_1314:avg_CMD_1314) 
+```
+
+```{r}
+names(tweedsmuir)[10:19] = c("lat", "long", "sum_PPT", "avg_PPT", "sum_NFFD", "avg_NFFD", "sum_PAS", "avg_PAS", "sum_CMD", "avg_CMD")
+head(tweedsmuir)
+```
+
+#### Variables for Entiako
+
+Fire burned in 2012 July
+Post fire climate included October 2012 - September 2013
+
+* Average precipitation 1-year post-fire
+* Average frost free days 1-year post-fire
+* Average precipitation as snow 1-year post-fire
+* Average climate moisture deficit 1-year post-fire
+
+```{r}
+entiako = entiako %>% 
+    mutate(sum_PPT_1213 = (PPT10.2012 + PPT11.2012 + PPT12.2012 + PPT01.2013 + PPT02.2013 + PPT03.2013 + PPT04.2013 + PPT05.2013 + PPT06.2013 + PPT07.2013 + PPT08.2013 + PPT09.2013)) %>%
+    mutate(avg_PPT_1213 = sum_PPT_1213/12) %>%
+    mutate(sum_NFFD_1213 = (NFFD10.2012 + NFFD11.2012 + NFFD12.2012 + NFFD01.2013 + NFFD02.2013 + NFFD03.2013 + NFFD04.2013 + NFFD05.2013 + NFFD06.2013 + NFFD07.2013 + NFFD08.2013 + NFFD09.2013)) %>%
+    mutate(avg_NFFD_1213 = sum_NFFD_1213/12) %>%
+    mutate(sum_PAS_1213 = (PAS10.2012 + PAS11.2012 + PAS12.2012 + PAS01.2013 + PAS02.2013 + PAS03.2013 + PAS04.2013 + PAS05.2013 + PAS06.2013 + PAS07.2013 + PAS08.2013 + PAS09.2013)) %>%
+    mutate(avg_PAS_1213 = sum_PAS_1213/12) %>%
+     mutate(sum_CMD_1213 = (CMD10.2012 + CMD11.2012 + CMD12.2012 + CMD01.2013 + CMD02.2013 + CMD03.2013 + CMD04.2013 + CMD05.2013 + CMD06.2013 + CMD07.2013 + CMD08.2013 + CMD09.2013)) %>%
+    mutate(avg_CMD_1213 = sum_CMD_1213/12)  
+```
+```{r}
+entiako = entiako %>%
+    dplyr::select(plot:long.y, sum_PPT_1213:avg_CMD_1213) 
+```
+
+```{r}
+names(entiako)[10:19] = c("lat", "long", "sum_PPT", "avg_PPT", "sum_NFFD", "avg_NFFD", "sum_PAS", "avg_PAS", "sum_CMD", "avg_CMD")
+head(entiako)
+```
+
+#### Variables for chelaslie
+
+Fire burned in 2014 July
+Post fire climate included October 2012 - September 2013
+
+* Average precipitation 1 year post fire
+* Average frost free days 1 year post fire
+* Average precipitation as snow 1 year post fire
+* Average climate moisture deficit 1 year post fire
+
+```{r}
+chelaslie = chelaslie %>% 
+    mutate(sum_PPT_1415 = (PPT10.2014 + PPT11.2014 + PPT12.2014 + PPT01.2015 + PPT02.2015 + PPT03.2015 + PPT04.2015 + PPT05.2015 + PPT06.2015 + PPT07.2015 + PPT08.2015 + PPT09.2015)) %>%
+    mutate(avg_PPT_1415 = sum_PPT_1415/12) %>%
+    mutate(sum_NFFD_1415 = (NFFD10.2014 + NFFD11.2014 + NFFD12.2014 + NFFD01.2015 + NFFD02.2015 + NFFD03.2015 + NFFD04.2015 + NFFD05.2015 + NFFD06.2015 + NFFD07.2015 + NFFD08.2015 + NFFD09.2015)) %>%
+    mutate(avg_NFFD_1415 = sum_NFFD_1415/12) %>%
+    mutate(sum_PAS_1415 = (PAS10.2014 + PAS11.2014 + PAS12.2014 + PAS01.2015 + PAS02.2015 + PAS03.2015 + PAS04.2015 + PAS05.2015 + PAS06.2015 + PAS07.2015 + PAS08.2015 + PAS09.2015)) %>%
+    mutate(avg_PAS_1415 = sum_PAS_1415/12) %>%
+     mutate(sum_CMD_1415 = (CMD10.2014 + CMD11.2014 + CMD12.2014 + CMD01.2015 + CMD02.2015 + CMD03.2015 + CMD04.2015 + CMD05.2015 + CMD06.2015 + CMD07.2015 + CMD08.2015 + CMD09.2015)) %>%
+    mutate(avg_CMD_1415 = sum_CMD_1415/12)  
+```
+
+```{r}
+chelaslie = chelaslie %>%
+    dplyr::select(plot:long.y, sum_PPT_1415:avg_CMD_1415) 
+```
+
+```{r}
+names(chelaslie)[10:19] = c("lat", "long", "sum_PPT", "avg_PPT", "sum_NFFD", "avg_NFFD", "sum_PAS", "avg_PAS", "sum_CMD", "avg_CMD")
+head(chelaslie)
+```
+
+### Merge fire event data
+
+```{r}
+postfire.weather = rbind(entiako, tweedsmuir, chelaslie)
+```
+
+Save to csv
+
+```{r include=FALSE}
+write.csv(postfire.weather, file ="../output/postfireweather_latlong_elev_ch3.csv", quote = TRUE, row.names = FALSE, sep = ",")
+```
+
+Create frost event variable, as total number of days with frost, to use in analysis instead of frost free days
+
+```{r}
+postfire.weather = mutate(postfire.weather, frost.events = 365-sum_NFFD)
+head(postfire.weather)
+```
+
+Select only plots that burned, remove unburned plots.
+
+```{r}
+postfire.weather = postfire.weather %>%
+    dplyr::filter(fire.severity != "unburned") 
+```
+
+# Topography data
+
+```{r}
+topo = read.csv("../data/field_aspect_slope.csv", header=TRUE, sep = ",", strip.white = TRUE)
+head(topo)
+```
+
+Add topography to weather data. 
+
+```{r}
+postfire.weather = merge(postfire.weather, topo, by = c("plot"))
+head(postfire.weather)
+```
+
+#### Calculate Heat Load
+
+Following equation 3 outlined by McCune and  Keon 2002 *Equations for potential annual direct incident radiation and heat load' in the Journal of Vegetation Science
+
+```{r}
+postfire.weather = mutate(postfire.weather, aspect_rad = deg2rad(aspect))
+postfire.weather = mutate(postfire.weather, foldaspect_rad = pi-abs(aspect_rad-(5*(pi)/4)))
+postfire.weather = mutate(postfire.weather, slope_rad = deg2rad(slope))
+postfire.weather = mutate(postfire.weather, lat_degrees = 53)
+postfire.weather = mutate(postfire.weather, lat_rad = deg2rad(lat_degrees))
+postfire.weather = mutate(postfire.weather, heatload = (0.339+0.808*cos(lat_rad)*cos(slope_rad)-0.196*sin(lat_rad)*sin(slope_rad)-0.482*cos(foldaspect_rad)*sin(slope_rad)))
+
+head(postfire.weather)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+qplot(heatload, data = postfire.weather)
+```
+
+# Seedling Data
+
+```{r}
+fire.seedeffort = read.csv("../data/chapter2_analysis34_seedlingeffort_11december2017.csv", header = TRUE, sep = ",", strip.white = TRUE)
+
+head(fire.seedeffort)
+```
+
+```{r}
+seedling.weather = merge(postfire.weather, fire.seedeffort, by = c("plot"))
+head(seedling.weather)
+```
+
+# Canopy structure data
+
+```{r}
+fire = read.csv("../data/2018-09-20_ch2-burnedplots-wcodes-edit43.csv", header = TRUE, sep = ",", strip.white = TRUE)
+head(fire)
+```
+
+```{r}
+seedling.weather = merge(seedling.weather, fire, by = c("plot"))
+head(seedling.weather)
+```
+
+### Calculate additional variables 
+
+```{r}
+seedling.weather = mutate(seedling.weather, prop.bom = bom/stems)
+seedling.weather = mutate(seedling.weather, prop.canopy = yes.canopy/stems)
+seedling.weather = mutate(seedling.weather, prop.nocanopy = no.canopy/stems)
+seedling.weather = mutate(seedling.weather, prop.opencone = yes.seed/stems)
+seedling.weather = mutate(seedling.weather, prop.closedcone = no.seed/stems)
+seedling.weather = mutate(seedling.weather, prop.cone.ct = cone.ct/stems)
+```
+
+```{r}
+datatable(seedling.weather)
+```
+
+# Analayses
+
+Due to a relatively small data set, we evaluated the influence of each climate variable with a separate statistical model 
+
+* Frost Event Model
+* Snow accumulation Model 
+* CMD Model
+
+## Model: Frost*Fire
+
+```{r}
+frostfire1 = glm.nb(seedling.ct ~ frost.events:fire.type + offset(log(seedling.area)), data = seedling.weather)
+```
+
+### Residuals 
+
+```{r, include=FALSE}
+frostfire1.res = simulateResiduals(fittedModel = frostfire1, n = 250)
+frostfire1.res$scaledResiduals
+frostfire1.res$scaledResidualsNormal
+```
+
+In the plot below we are looking for the points in the QQ plot to fall along the RED lines. In the Residuals vs.predicted plot were are looking for the lines to be relatively horizontal. All looks good. 
+
+```{r}
+plotSimulatedResiduals(simulationOutput = frostfire1.res)
+```
+
+```{r}
+testOverdispersion(frostfire1.res)
+```
+
+### Summary
+
+```{r}
+summary(frostfire1)
+```
+### Estimates
+
+```{r}
+( frostfire1.est = cbind(Estimate = coef(frostfire1), confint(frostfire1)))
+( exp(frostfire1.est))
+```
+
+```{r}
+(frost_estimate=exp(coef(frostfire1)))
+(frost_lcl_ucl=exp(confint(frostfire1)))
+(frost_p_value=summary(frostfire1)$coefficients[,4] )
+```
+
+### Predict Frost*Fire 
+
+```{r}
+preddat.frostfire1 = data.frame(frost.events = seedling.weather$frost.events, fire.type = factor(seedling.weather$fire.type), seedling.area = 100)
+
+head(preddat.frostfire1)
+
+predfrostfire1 = predict(frostfire1, newdata = preddat.frostfire1, se.fit = TRUE)
+
+ULfrostfire1 = with(predfrostfire1, fit + 1.96*se.fit)
+LLfrostfire1 = with(predfrostfire1, fit - 1.96*se.fit)
+
+seedling.weather = mutate(seedling.weather, predfrostfire1 = exp(predfrostfire1$fit), 
+               ULfrostfire1 = exp(ULfrostfire1), 
+               LLfrostfire1 = exp(LLfrostfire1), 
+               seedling.area = 100)
+
+```
+
+### Figure with raw data
+
+```{r}
+pfrostfire1 = ggplot(data = seedling.weather, aes(x = frost.events, y = seedling.ct, color = factor(fire.type))) + 
+              geom_point(size = 2) + 
+               geom_line(aes(y=LLfrostfire1, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+              geom_line(aes(y=ULfrostfire1, color = factor(fire.type)), linetype='longdash', size = 1) +
+              scale_linetype(guide = "none") 
+
+pfrostfire2 = pfrostfire1 + 
+      geom_ribbon(aes(ymin=LLfrostfire1, ymax=ULfrostfire1, fill= fire.type), linetype = 0, alpha=.25, show.legend = FALSE) + 
+      scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60"), guide = FALSE) 
+
+( pfrostfire3 = pfrostfire2 + geom_line(aes(y = predfrostfire1, color = factor(fire.type)), linetype = 1, size = 2) + 
+         scale_color_manual(values = c("#f03b20", "#feb24c", "#91cf60"), name="Fire Severity",
+                         breaks=c("crown", "sev.surf", "surface"),
+                         labels=c("Crown", "Severe surface", "Light surface")) + 
+    ylab("Seedling count") +
+    xlab("Total Frost Days")  +
+    theme_bw() +
+    theme(legend.position = "none") +
+    theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.5, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) )
+```
+
+###Figure without raw data
+
+```{r}
+pfrostfire4 = ggplot(data = seedling.weather, aes(x = frost.events, y = seedling.ct, color = factor(fire.type))) + 
+              geom_line(aes(y=LLfrostfire1, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+              geom_line(aes(y=ULfrostfire1, color = factor(fire.type)), linetype='longdash', size = 1) +
+              scale_linetype(guide = "none") 
+
+pfrostfire5 = pfrostfire4 + 
+      geom_ribbon(aes(ymin=LLfrostfire1, ymax=ULfrostfire1, fill= fire.type), linetype = 0, alpha=.25, show.legend = FALSE) + 
+      scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60"), guide = FALSE) 
+
+( pfrostfire6 = pfrostfire5 + geom_line(aes(y = predfrostfire1, color = factor(fire.type)), linetype = 1, size = 2) + 
+         scale_color_manual(values = c("#f03b20", "#feb24c", "#91cf60"), name="Fire Severity",
+                         breaks=c("crown", "sev.surf", "surface"),
+                         labels=c("Crown", "Severe surface", "Light surface")) + 
+    ylab("Seedling count") +
+    xlab("Frost events (days)")  +
+    theme_bw() +
+    theme(legend.position = "none") +
+    theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.5, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) )
+```
+
+
+
+## Model: Snow & fire
+```{r}
+snowfire1 = glm.nb(seedling.ct ~ sum_PAS:fire.type + offset(log(seedling.area)), data = seedling.weather)
+```
+
+### Residuals
+
+```{r, include=FALSE}
+snowfire1.res = simulateResiduals(fittedModel = snowfire1, n = 250)
+snowfire1.res$scaledResiduals
+snowfire1.res$scaledResidualsNormal
+```
+
+In the plot below we are looking for the points in the QQ plot to fall along the RED lines. In the Residuals vs.predicted plot were are looking for the lines to be relatively horizontal. All looks good. 
+
+```{r}
+plotSimulatedResiduals(simulationOutput = snowfire1.res)
+```
+
+```{r}
+testOverdispersion(snowfire1.res)
+```
+
+### Summary 
+
+```{r}
+summary(snowfire1)
+```
+
+### Estimates
+
+```{r}
+( snowfire1.est = cbind(Estimate = coef(snowfire1), confint(snowfire1)))
+( exp(snowfire1.est))
+```
+
+```{r}
+snow_estimate=exp(coef(snowfire1))
+snow_lcl_ucl=exp(confint(snowfire1))
+snow_p_value=summary(snowfire1)$coefficients[,4] 
+```
+
+### Predict Frost*Fire 
+
+```{r}
+preddat.snowfire1 = data.frame(sum_PAS = seedling.weather$sum_PAS, fire.type = factor(seedling.weather$fire.type), seedling.area = 100)
+
+head(preddat.snowfire1)
+
+predsnowfire1 = predict(snowfire1, newdata = preddat.snowfire1, se.fit = TRUE)
+
+ULsnowfire1 = with(predsnowfire1, fit + 1.96*se.fit)
+LLsnowfire1 = with(predsnowfire1, fit - 1.96*se.fit)
+
+seedling.weather = mutate(seedling.weather, predsnowfire1 = exp(predsnowfire1$fit), 
+               ULsnowfire1 = exp(ULsnowfire1), 
+               LLsnowfire1 = exp(LLsnowfire1), 
+               seedling.area = 100)
+
+```
+
+
+### Figure with raw data
+
+```{r}
+psnowfire1 = ggplot(data = seedling.weather, aes(x = sum_PAS, y = seedling.ct, color = factor(fire.type))) + 
+              geom_point(size = 2) + 
+              geom_line(aes(y=LLsnowfire1, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+              geom_line(aes(y=ULsnowfire1, color = factor(fire.type)), linetype='longdash', size = 1) +
+              scale_linetype(guide = "none") 
+
+psnowfire2 = psnowfire1 + 
+      geom_ribbon(aes(ymin=LLsnowfire1, ymax=ULsnowfire1, fill= fire.type), linetype = 0, alpha=.25, show.legend = FALSE) + 
+      scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60"), guide = FALSE)  
+
+( psnowfire3 = psnowfire2 + geom_line(aes(y = predsnowfire1, color = factor(fire.type)), linetype = 1, size = 2) + 
+         scale_color_manual(values = c("#f03b20", "#feb24c", "#91cf60"), name="Fire Severity",
+                         breaks=c("crown", "sev.surf", "surface"),
+                         labels=c("Crown", "Severe surface", "Light surface")) + 
+    ylab("Seedling count") +
+    xlab("Snow (mm)")  +
+    theme_bw() +
+    theme(legend.position = "none") +
+    theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.5, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) )
+```
+
+### Figure without raw data
+
+```{r}
+psnowfire4 = ggplot(data = seedling.weather, aes(x = sum_PAS, y = seedling.ct, color = factor(fire.type))) +  
+              geom_line(aes(y=LLsnowfire1, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+              geom_line(aes(y=ULsnowfire1, color = factor(fire.type)), linetype='longdash', size = 1) +
+              scale_linetype(guide = "none") 
+
+psnowfire5 = psnowfire4 + 
+      geom_ribbon(aes(ymin=LLsnowfire1, ymax=ULsnowfire1, fill= fire.type), linetype = 0, alpha=.25, show.legend = FALSE) + 
+      scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60"), guide = FALSE)  
+
+( psnowfire6 = psnowfire5 + geom_line(aes(y = predsnowfire1, color = factor(fire.type)), linetype = 1, size = 2) + 
+         scale_color_manual(values = c("#f03b20", "#feb24c", "#91cf60"), name="Fire Severity",
+                         breaks=c("crown", "sev.surf", "surface"),
+                         labels=c("Crown", "Severe surface", "Light surface")) + 
+    ylab("Seedling count") +
+    xlab("Snow accumulation (mm)")  +
+    ylim(0,300) +
+    theme_bw() +
+    theme(legend.position = "none") +
+    theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.5, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) )
+```
+
+
+## CMD Model
+
+```{r}
+CMDfire1 = glm.nb(seedling.ct ~ sum_CMD:fire.type + offset(log(seedling.area)), data = seedling.weather)
+```
+
+### Residuals
+
+```{r, include=FALSE}
+CMDfire1.res = simulateResiduals(fittedModel = CMDfire1, n = 250)
+CMDfire1.res$scaledResiduals
+CMDfire1.res$scaledResidualsNormal
+```
+
+In the plot below we are looking for the points in the QQ plot to fall along the RED lines. In the Residuals vs.predicted plot were are looking for the lines to be relatively horizontal. All looks good.
+
+```{r}
+plotSimulatedResiduals(simulationOutput = CMDfire1.res)
+```
+
+```{r}
+testOverdispersion(CMDfire1.res)
+```
+
+### Summary 
+
+```{r}
+summary(CMDfire1)
+```
+
+### Estimates
+
+```{r}
+( CMDfire1.est = cbind(Estimate = coef(CMDfire1), confint(CMDfire1)))
+( exp(CMDfire1.est))
+```
+
+```{r}
+cmd_estimate=exp(coef(CMDfire1))
+cmd_lcl_ucl=exp(confint(CMDfire1))
+cmd_p_value=summary(CMDfire1)$coefficients[,4] 
+```
+
+```{r}
+sum_df=data.frame(frost_estimate, frost_lcl_ucl, frost_p_value, snow_estimate, snow_lcl_ucl, snow_p_value, cmd_estimate, cmd_lcl_ucl, cmd_p_value)
+sum_df
+write.csv(sum_df, '../output/2019-02-06_climate_fire_summary.csv', row.names = F)
+```
+
+### Predict CMD Data 
+
+```{r}
+preddat.cmdfire1 = data.frame(sum_CMD = seedling.weather$sum_CMD, fire.type = factor(seedling.weather$fire.type), seedling.area = 100)
+
+head(preddat.cmdfire1)
+
+predcmdfire1 = predict(CMDfire1, newdata = preddat.cmdfire1, se.fit = TRUE)
+
+ULcmdfire1 = with(predcmdfire1, fit + 1.96*se.fit)
+LLcmdfire1 = with(predcmdfire1, fit - 1.96*se.fit)
+
+seedling.weather = mutate(seedling.weather, predcmdfire1 = exp(predcmdfire1$fit), 
+               ULcmdfire1 = exp(ULcmdfire1), 
+               LLcmdfire1 = exp(LLcmdfire1), 
+               seedling.area = 100)
+
+```
+
+###Figure with raw data
+
+```{r}
+pcmdfire1 = ggplot(data = seedling.weather, aes(x = sum_CMD, y = seedling.ct, color = factor(fire.type))) +
+              geom_point(size = 2) + 
+              geom_line(aes(y=LLcmdfire1, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+              geom_line(aes(y=ULcmdfire1, color = factor(fire.type)), linetype='longdash', size = 1) +
+              scale_linetype(guide = "none") 
+
+pcmdfire2 = pcmdfire1 + 
+      geom_ribbon(aes(ymin=LLcmdfire1, ymax=ULcmdfire1, fill= fire.type), linetype = 0, alpha=.25, show.legend = FALSE) + 
+      scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60"), guide = FALSE)  
+
+( pcmdfire3 = pcmdfire2 + geom_line(aes(y = predcmdfire1, color = factor(fire.type)), linetype = 1, size = 2) + 
+         scale_color_manual(values = c("#f03b20", "#feb24c", "#91cf60"), name="Fire Severity",
+                         breaks=c("crown", "sev.surf", "surface"),
+                         labels=c("Crown", "Severe surface", "Light surface")) + 
+    ylab("Seedling count") +
+    xlab("CMD")  +
+    theme_bw() +
+    theme(legend.position = "none") +
+    theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.5, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) )
+```
+
+### Figure without raw data
+
+```{r}
+pcmdfire4 = ggplot(data = seedling.weather, aes(x = sum_CMD, y = seedling.ct, color = factor(fire.type))) +
+              geom_line(aes(y=LLcmdfire1, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+              geom_line(aes(y=ULcmdfire1, color = factor(fire.type)), linetype='longdash', size = 1) +
+              scale_linetype(guide = "none") 
+
+pcmdfire5 = pcmdfire4 + 
+      geom_ribbon(aes(ymin=LLcmdfire1, ymax=ULcmdfire1, fill= fire.type), linetype = 0, alpha=.25, show.legend = FALSE) + 
+      scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60"), guide = FALSE)  
+
+( pcmdfire6 = pcmdfire5 + geom_line(aes(y = predcmdfire1, color = factor(fire.type)), linetype = 1, size = 2) + 
+         scale_color_manual(values = c("#f03b20", "#feb24c", "#91cf60"), name="Fire Severity",
+                         breaks=c("crown", "sev.surf", "surface"),
+                         labels=c("Crown", "Severe surface", "Light surface")) + 
+    ylab("Seedling count") +
+    xlab("Climate moisture deficit (mm)") +
+    ylim(0, 200) +
+    theme_bw() +
+    theme(legend.position = "none") +
+    theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.5, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) )
+```
+
+
+# Remove outliers
+
+Remove prominent outliers (Plots - 27, 34, 40) and rerun analyses
+
+```{r}
+head(seedling.weather)
+```
+
+```{r}
+seed_clim_out = subset(seedling.weather, plot != 27 & plot != 34 & plot != 40) 
+seed_clim_out
+```
+
+
+## Analayses: Postfire Climate & Fire Severity
+
+### Frost Model (outliers removed)
+
+```{r}
+ofrostfire1 = glm.nb(seedling.ct ~ frost.events:fire.type + offset(log(seedling.area)), data = seed_clim_out)
+```
+
+#### Residuals 
+
+```{r, include=FALSE}
+ofrostfire1.res = simulateResiduals(fittedModel = ofrostfire1, n = 250)
+ofrostfire1.res$scaledResiduals
+ofrostfire1.res$scaledResidualsNormal
+```
+
+In the plot below we are looking for the points in the QQ plot to fall along the RED lines. In the Residuals vs.predicted plot were are looking for the lines to be relatively horizontal. All looks good.
+
+```{r}
+plotSimulatedResiduals(simulationOutput = ofrostfire1.res)
+```
+
+```{r}
+testOverdispersion(ofrostfire1.res)
+```
+
+#### Summary
+
+```{r}
+summary(ofrostfire1)
+```
+
+#### Estimates
+
+```{r}
+( ofrostfire1.est = cbind(Estimate = coef(ofrostfire1), confint(ofrostfire1)))
+( exp(ofrostfire1.est))
+```
+
+```{r}
+ofrost_estimate=exp(coef(ofrostfire1))
+ofrost_lcl_ucl=exp(confint(ofrostfire1))
+ofrost_p_value=summary(ofrostfire1)$coefficients[,4] 
+```
+
+#### Predict 
+
+```{r}
+preddat.ofrostfire1 = data.frame(frost.events = seed_clim_out$frost.events, fire.type = factor(seed_clim_out$fire.type), seedling.area = 100)
+
+head(preddat.ofrostfire1)
+
+predofrostfire1 = predict(ofrostfire1, newdata = preddat.ofrostfire1, se.fit = TRUE)
+
+ULofrostfire1 = with(predofrostfire1, fit + 1.96*se.fit)
+LLofrostfire1 = with(predofrostfire1, fit - 1.96*se.fit)
+
+seed_clim_out = mutate(seed_clim_out, predofrostfire1 = exp(predofrostfire1$fit), 
+               ULofrostfire1 = exp(ULofrostfire1), 
+               LLofrostfire1 = exp(LLofrostfire1), 
+               seedling.area = 100)
+
+```
+
+#### Figure with raw data
+
+```{r, echo=FALSE}
+pofrostfire1 = ggplot(data = seed_clim_out, aes(x = frost.events, y = seedling.ct, color = factor(fire.type))) + 
+              geom_point(size = 2) + 
+              geom_line(aes(y=LLofrostfire1, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+              geom_line(aes(y=ULofrostfire1, color = factor(fire.type)), linetype='longdash', size = 1) +
+              scale_linetype(guide = "none") 
+
+pofrostfire2 = pofrostfire1 + 
+      geom_ribbon(aes(ymin=LLofrostfire1, ymax=ULofrostfire1, fill= fire.type), linetype = 0, alpha=.25, show.legend = FALSE) + 
+      scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60"), guide = FALSE) 
+
+( pofrostfire3 = pofrostfire2 + geom_line(aes(y = predofrostfire1, color = factor(fire.type)), linetype = 1, size = 2) + 
+         scale_color_manual(values = c("#f03b20", "#feb24c", "#91cf60"), name="Fire Severity",
+                         breaks=c("crown", "sev.surf", "surface"),
+                         labels=c("Crown", "Severe surface", "Light surface")) + 
+    ylab("Seedling count") +
+    xlab("Total Frost Days")  +
+    theme_bw() +
+    theme(legend.position = "none") +
+    theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.5, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) )
+```
+
+#### Figure without raw data
+
+```{r}
+pofrostfire4 = ggplot(data = seed_clim_out, aes(x = frost.events, y = seedling.ct, color = factor(fire.type))) + 
+              geom_line(aes(y=LLofrostfire1, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+              geom_line(aes(y=ULofrostfire1, color = factor(fire.type)), linetype='longdash', size = 1) +
+              scale_linetype(guide = "none") 
+
+pofrostfire5 = pofrostfire4 + 
+      geom_ribbon(aes(ymin=LLofrostfire1, ymax=ULofrostfire1, fill= fire.type), linetype = 0, alpha=.25, show.legend = FALSE) + 
+      scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60"), guide = FALSE) 
+
+( pofrostfire6 = pofrostfire5 + geom_line(aes(y = predofrostfire1, color = factor(fire.type)), linetype = 1, size = 2) + 
+         scale_color_manual(values = c("#f03b20", "#feb24c", "#91cf60"), name="Fire Severity",
+                         breaks=c("crown", "sev.surf", "surface"),
+                         labels=c("Crown", "Severe surface", "Light surface")) + 
+    ylab("Seedling count") +
+    xlab("Total Frost Days")  +
+    theme_bw() +
+    theme(legend.position = "none") +
+    theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.5, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) )
+```
+
+
+## Snow Model (outliers removed)
+
+```{r}
+osnowfire1 = glm.nb(seedling.ct ~ sum_PAS:fire.type + offset(log(seedling.area)), data = seed_clim_out)
+```
+
+### Residuals 
+
+```{r, include=FALSE}
+osnowfire1.res = simulateResiduals(fittedModel = osnowfire1, n = 250)
+osnowfire1.res$scaledResiduals
+osnowfire1.res$scaledResidualsNormal
+```
+
+In the plot below we are looking for the points in the QQ plot to fall along the RED lines. In the Residuals vs.predicted plot were are looking for the lines to be relatively horizontal. All looks good. 
+
+```{r}
+plotSimulatedResiduals(simulationOutput = osnowfire1.res)
+```
+
+```{r}
+testOverdispersion(osnowfire1.res)
+```
+
+#### Summary 
+
+```{r}
+summary(osnowfire1)
+```
+
+#### Estimates
+
+```{r}
+( osnowfire1.est = cbind(Estimate = coef(osnowfire1), confint(osnowfire1)))
+( exp(osnowfire1.est))
+```
+
+```{r}
+osnow_estimate=exp(coef(osnowfire1))
+osnow_lcl_ucl=exp(confint(osnowfire1))
+osnow_p_value=summary(osnowfire1)$coefficients[,4] 
+```
+
+#### Predict 
+
+```{r}
+preddat.osnowfire1 = data.frame(sum_PAS = seed_clim_out$sum_PAS, fire.type = factor(seed_clim_out$fire.type), seedling.area = 100)
+
+head(preddat.osnowfire1)
+
+predosnowfire1 = predict(osnowfire1, newdata = preddat.osnowfire1, se.fit = TRUE)
+
+ULosnowfire1 = with(predosnowfire1, fit + 1.96*se.fit)
+LLosnowfire1 = with(predosnowfire1, fit - 1.96*se.fit)
+
+seed_clim_out = mutate(seed_clim_out, predosnowfire1 = exp(predosnowfire1$fit), 
+               ULosnowfire1 = exp(ULosnowfire1), 
+               LLosnowfire1 = exp(LLosnowfire1), 
+               seedling.area = 100)
+
+```
+
+#### Figure with raw data
+
+```{r, echo=FALSE}
+posnowfire1 = ggplot(data = seed_clim_out, aes(x = sum_PAS, y = seedling.ct, color = factor(fire.type))) + 
+              geom_point(size = 2) + 
+              geom_line(aes(y=LLosnowfire1, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+              geom_line(aes(y=ULosnowfire1, color = factor(fire.type)), linetype='longdash', size = 1) +
+              scale_linetype(guide = "none") 
+
+posnowfire2 = posnowfire1 + 
+      geom_ribbon(aes(ymin=LLosnowfire1, ymax=ULosnowfire1, fill= fire.type), linetype = 0, alpha=.25, show.legend = FALSE) + 
+      scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60"), guide = FALSE)  
+
+( posnowfire3 = posnowfire2 + geom_line(aes(y = predosnowfire1, color = factor(fire.type)), linetype = 1, size = 2) + 
+         scale_color_manual(values = c("#f03b20", "#feb24c", "#91cf60"), name="Fire Severity",
+                         breaks=c("crown", "sev.surf", "surface"),
+                         labels=c("Crown", "Severe surface", "Light surface")) + 
+    ylab("Seedling count") +
+    xlab("Snow (mm)")  +
+    theme_bw() +
+    theme(legend.position = "none") +
+    theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.5, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) )
+```
+
+#### Figure without raw data
+
+```{r, echo=FALSE}
+posnowfire4 = ggplot(data = seed_clim_out, aes(x = sum_PAS, y = seedling.ct, color = factor(fire.type))) + 
+              geom_line(aes(y=LLosnowfire1, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+              geom_line(aes(y=ULosnowfire1, color = factor(fire.type)), linetype='longdash', size = 1) +
+              scale_linetype(guide = "none") 
+
+posnowfire5 = posnowfire4 + 
+      geom_ribbon(aes(ymin=LLosnowfire1, ymax=ULosnowfire1, fill= fire.type), linetype = 0, alpha=.25, show.legend = FALSE) + 
+      scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60"), guide = FALSE)  
+
+( posnowfire6 = posnowfire5 + geom_line(aes(y = predosnowfire1, color = factor(fire.type)), linetype = 1, size = 2) + 
+         scale_color_manual(values = c("#f03b20", "#feb24c", "#91cf60"), name="Fire Severity",
+                         breaks=c("crown", "sev.surf", "surface"),
+                         labels=c("Crown", "Severe surface", "Light surface")) + 
+    ylab("Seedling count") +
+    xlab("Snow (mm)")  +
+    theme_bw() +
+    theme(legend.position = "none") +
+    theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.5, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) )
+```
+
+
+## CMD Model (outliers removed)
+
+```{r}
+oCMDfire1 = glm.nb(seedling.ct ~ sum_CMD:fire.type + offset(log(seedling.area)), data = seed_clim_out)
+```
+
+### Residuals with DHARMa
+
+```{r, include=FALSE}
+oCMDfire1.res = simulateResiduals(fittedModel = oCMDfire1, n = 250)
+oCMDfire1.res$scaledResiduals
+oCMDfire1.res$scaledResidualsNormal
+```
+
+In the plot below we are looking for the points in the QQ plot to fall along the RED lines. In the Residuals vs.predicted plot were are looking for the lines to be relatively horizontal. All looks good. 
+
+```{r}
+plotSimulatedResiduals(simulationOutput = oCMDfire1.res)
+```
+
+```{r}
+testOverdispersion(oCMDfire1.res)
+```
+
+#### Summary 
+
+```{r}
+summary(oCMDfire1)
+```
+
+#### Estimates
+
+```{r}
+( oCMDfire1.est = cbind(Estimate = coef(oCMDfire1), confint(oCMDfire1)))
+( exp(oCMDfire1.est))
+summary(oCMDfire1)$coefficients[,4] 
+```
+
+```{r}
+ocmd_estimate=exp(coef(oCMDfire1))
+ocmd_lcl_ucl=exp(confint(oCMDfire1))
+ocmd_p_value=summary(oCMDfire1)$coefficients[,4] 
+```
+
+```{r}
+out_df=data.frame(ofrost_estimate, ofrost_lcl_ucl, ofrost_p_value, osnow_estimate, osnow_lcl_ucl, osnow_p_value, ocmd_estimate, ocmd_lcl_ucl, ocmd_p_value)
+out_df
+write.csv(out_df, '../output/2019-02-06_climate_fire_outliers.csv', row.names = F)
+```
+
+
+#### Predict 
+
+```{r}
+preddat.ocmdfire1 = data.frame(sum_CMD = seed_clim_out$sum_CMD, fire.type = factor(seed_clim_out$fire.type), seedling.area = 100)
+
+head(preddat.ocmdfire1)
+
+predocmdfire1 = predict(oCMDfire1, newdata = preddat.ocmdfire1, se.fit = TRUE)
+
+ULocmdfire1 = with(predocmdfire1, fit + 1.96*se.fit)
+LLocmdfire1 = with(predocmdfire1, fit - 1.96*se.fit)
+
+seed_clim_out = mutate(seed_clim_out, predocmdfire1 = exp(predocmdfire1$fit), 
+               ULocmdfire1 = exp(ULocmdfire1), 
+               LLocmdfire1 = exp(LLocmdfire1), 
+               seedling.area = 100)
+
+```
+
+####Figure with raw data
+
+```{r, echo=FALSE}
+pocmdfire1 = ggplot(data = seed_clim_out, aes(x = sum_CMD, y = seedling.ct, color = factor(fire.type))) +
+              geom_point(size = 2) + 
+              geom_line(aes(y=LLocmdfire1, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+              geom_line(aes(y=ULocmdfire1, color = factor(fire.type)), linetype='longdash', size = 1) +
+              scale_linetype(guide = "none") 
+
+pocmdfire2 = pocmdfire1 + 
+      geom_ribbon(aes(ymin=LLocmdfire1, ymax=ULocmdfire1, fill= fire.type), linetype = 0, alpha=.25, show.legend = FALSE) + 
+      scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60"), guide = FALSE)  
+
+pocmdfire3 = pocmdfire2 + geom_line(aes(y = predocmdfire1, color = factor(fire.type)), linetype = 1, size = 2) + 
+         scale_color_manual(values = c("#f03b20", "#feb24c", "#91cf60"), name="Fire Severity",
+                         breaks=c("crown", "sev.surf", "surface"),
+                         labels=c("Crown", "Severe surface", "Light surface")) + 
+    ylab("Seedling count") +
+    xlab("CMD")  +
+    theme_bw() +
+    theme(legend.position = "none") +
+    theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.5, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) 
+
+pocmdfire3
+```
+
+#### Figure without raw data
+
+```{r}
+pocmdfire4 = ggplot(data = seed_clim_out, aes(x = sum_CMD, y = seedling.ct, color = factor(fire.type))) + 
+              geom_line(aes(y=LLocmdfire1, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+              geom_line(aes(y=ULocmdfire1, color = factor(fire.type)), linetype='longdash', size = 1) +
+              scale_linetype(guide = "none") 
+
+pocmdfire5 = pocmdfire4 + 
+      geom_ribbon(aes(ymin=LLocmdfire1, ymax=ULocmdfire1, fill= fire.type), linetype = 0, alpha=.25, show.legend = FALSE) + 
+      scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60"), guide = FALSE)  
+
+pocmdfire6 = pocmdfire5 + geom_line(aes(y = predocmdfire1, color = factor(fire.type)), linetype = 1, size = 2) + 
+         scale_color_manual(values = c("#f03b20", "#feb24c", "#91cf60"), name="Fire Severity",
+                         breaks=c("crown", "sev.surf", "surface"),
+                         labels=c("Crown", "Severe surface", "Light surface")) + 
+    ylab("Seedling count") +
+    xlab("Climate moisture deficit (mm)")  +
+    ylim(0, 200) +
+    theme_bw() +
+    theme(legend.position = "none") +
+    theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.5, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) 
+
+pocmdfire6
+```
+
+#### Legend
+
+```{r, echo=FALSE}
+legend1 = ggplot(data = seed_clim_out, aes(x = sum_CMD, y = seedling.ct, color = factor(fire.type))) + 
+              geom_line(aes(y=LLocmdfire1, color = factor(fire.type)), linetype = 'longdash', size = 1) + 
+              geom_line(aes(y=ULocmdfire1, color = factor(fire.type)), linetype='longdash', size = 1) +
+              scale_linetype(guide = "none") 
+
+legend2 = legend1 + 
+      geom_ribbon(aes(ymin=LLocmdfire1, ymax=ULocmdfire1, fill= fire.type), linetype = 0, alpha=.25, show.legend = FALSE) + 
+      scale_fill_manual(values=c("#f03b20", "#feb24c", "#91cf60"), guide = FALSE)  
+
+legend3 = legend2 + geom_line(aes(y = predocmdfire1, color = factor(fire.type)), linetype = 1, size = 2) + 
+         scale_color_manual(values = c("#f03b20", "#feb24c", "#91cf60"), name="Fire Severity",
+                         breaks=c("crown", "sev.surf", "surface"),
+                         labels=c("Crown", "Severe surface", "Light surface")) + 
+    ylab("Seedling count") +
+    xlab("CMD")  +
+  theme_bw() +
+    theme(legend.title = element_text(size = 10), legend.position = "bottom") +
+    theme(plot.margin = unit(c(t = 0.3, r = 0.1, b = 0.3, l = 0.1), "cm")) +
+    theme(axis.title.x = element_text(size = 11, hjust = 0.5, vjust = -0.1),
+        axis.title.y = element_text(size = 11, hjust = 0.5, vjust = 1.1),
+        axis.text.x = element_text(size = 10, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black"))
+
+legend3
+ 
+```
+
+# Figures with and without outliers
+
+```{r, echo=FALSE}
+gridcmd=cowplot::plot_grid(pcmdfire3, pocmdfire3, labels = c("A", "B"), align = "hv", ncol= 2) 
+```
+
+```{r eval=FALSE, include=FALSE}
+ggsave("../figs/2019-02-06_climate_fire_cmd.jpeg", plot = gridcmd, width = 8, height = 4, units = c("in"), dpi=600 )
+```
+
+
+```{r, echo=FALSE, fig.height=4, fig.width=8}
+gridsnow=cowplot::plot_grid(psnowfire3, posnowfire3, labels = c("A", "B"), align = "hv", ncol= 2) 
+```
+
+```{r eval=FALSE, include=FALSE}
+ggsave("../figs/2019-02-06_climate_fire_snow.jpeg", plot = gridsnow, width = 8, height = 4, units = c("in"), dpi=600 )
+```
+
+```{r fig.height=4, fig.width=8}
+gridfrost=cowplot::plot_grid(pfrostfire3, pofrostfire3, labels = c("A", "B"), align = "hv", ncol= 2) 
+```
+
+```{r eval=FALSE, include=FALSE}
+ggsave("../figs/2019-02-06_climate_fire_frost.jpeg", plot = gridfrost, width = 8, height = 4, units = c("in"), dpi=600 )
+```
+
+# Manuscript Figure 
+
+```{r, echo=FALSE, fig.height=5, fig.width=6}
+legend = cowplot::get_legend(legend3)
+gridall1=cowplot::plot_grid(pfrostfire6, psnowfire6, pcmdfire6, pocmdfire6, labels = c("A", "B","C","D"), align = "hv", ncol= 2) + 
+  draw_label("*", x = .98, y = .165, size = 20, fontface = "bold") +
+  draw_label("*", x = .98, y = .147, size = 20, fontface = "bold") +
+  draw_label("*", x = .98, y = .13, size = 20, fontface = "bold") + 
+  draw_label("*", x = .98, y = .66, size = 20, fontface = "bold") +
+  draw_label("*", x = .98, y = .645, size = 20, fontface = "bold") +
+  draw_label("*", x = .98, y = .63, size = 20, fontface = "bold") 
+
+
+(gridall2 = plot_grid(gridall1, legend, ncol=1, rel_widths = c(1, .1), rel_heights = c(1, .05)) ) 
+```
+
+```{r eval=FALSE, include=FALSE}
+ggsave("../figs/2019-02-12_climate_fire_all.jpeg", plot = gridall2, width = 6, height = 5, units = c("in"), dpi=600 )
+```
