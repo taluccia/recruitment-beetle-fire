@@ -25,22 +25,24 @@ The groupings created plots with repeated measures. Plots were replicates. Becau
 # Packages
 
 The following Packages are required for the below analyses:
-
-```{r, message=FALSE, warning=FALSE}
-library(dplyr)
-library(tidyr)
-library(ggplot2)
 library(GGally)
-library(MASS)
+
 library(car)
-library(lme4)
-library(lsmeans)
-library(DHARMa)
 library(gmodels)
 library(grid)
 library(gridExtra)
 library(gtable)
 library(magick)
+
+```{r, message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(lme4)
+library(MASS)
+library(lsmeans)
+library(DHARMa)
+library(cowplot)
 ```
 
 # Data
@@ -182,131 +184,8 @@ dis1990$est.time = factor(dis1990$est.time, levels = c("pre1990", "during1999", 
 head(dis1990)
 ```
 
-### MODEL
-```{r}
-fitdis1990 = glmer.nb(sapling.ct ~ est.time + (1 | plot.no), data = dis1990)
-```
 
-### Residuals
-
-```{r, include=FALSE}
-fitdis1990.res = simulateResiduals(fittedModel = fitdis1990, n = 250)
-
-fitdis1990.res$scaledResiduals
-
-fitdis1990.res$scaledResidualsNormal
-```
-
-In the plot below we are looking for the points in the QQ plot to fall along the RED linen. In the Residuals vs.predicted plot were are looking for the lines to be relatively horizontal. All looks good. 
-
-```{r}
-plotSimulatedResiduals(simulationOutput = fitdis1990.res)
-```
-
-QQ plot looks ok with no significant deviations from the plot line. The residual vs predicted plot looks ok, lines are relatively horizontal. Th lack of horizontality maybe due to lack of data in certain regions, but these generally look adequate.
-
-The qqplot here fits better then the above plot, which indicates that the split of pre/during/post establishment removes some of the noise when there are only 2 categories of pre/post that does not seem to account for the variability as well.
-
-QQplot looks ok with no significant deviations. The residual vs predicted plot looks ok with lines that are relatively horizontal.
-
-### Overdispersion
-
-```{r}
-simulationOutput1990 <- simulateResiduals(fittedModel = fitdis1990, refit = T, n = 20)
-testOverdispersion(simulationOutput1990)
-```
-
-### Summary 
-
-```{r}
-summary(fitdis1990)
-```
-
-
-### Estimates
-```{r}
-lsmeans(fitdis1990, pairwise ~ est.time, type = "response", infer = TRUE, level = .95, adjust = 'bon')
-```
-
-```{r}
-summary(lsmeans(fitdis1990, pairwise ~ est.time), type = "response", infer = TRUE, level = .95, adjust = "bon")
-```
-
-```{r}
-summary(lsmeans(fitdis1990, revpairwise ~ est.time), type = "response", infer = TRUE, level = .95, adjust = "bon")
-```
-
-##### Data Frame
-
-```{r}
-( fitdis1990.graph = data.frame(summary(lsmeans(fitdis1990, pairwise ~ est.time, type = "response", infer = TRUE))) )
-```
-
-```{r eval=FALSE, include=FALSE}
-output = fitdis1990.graph %>%
-  select(lsmeans.est.time, lsmeans.response, lsmeans.asymp.LCL, lsmeans.asymp.UCL) 
-
-output_tab = round( output[, c("lsmeans.response", "lsmeans.asymp.LCL", "lsmeans.asymp.UCL")], 2) 
-
-rownames(output_tab) = c("Pre (1990-1998)", "During (1999-2006)", "Post (2007-2015)")
-
-colnames(output_tab) = c("Estimate", "Lower CI", "Upper CI")
-
-( output_t1 = output_tab[, c("Estimate", "Lower CI", "Upper CI")] )
-```
-```{r eval=FALSE, include=FALSE}
-output = fitdis1990.graph %>%
-  select(contrasts.contrast, contrasts.response.ratio, contrasts.p.value) 
-
-output_tab = round( output[, c("lsmeans.response", "lsmeans.asymp.LCL", "lsmeans.asymp.UCL")], 2) 
-
-rownames(output_tab) = c("Pre (1990-1998)", "During (1999-2006)", "Post (2007-2015)")
-
-colnames(output_tab) = c("Estimate", "Lower CI", "Upper CI")
-
-( output_t1 = output_tab[, c("Estimate", "Lower CI", "Upper CI")] )
-```
-
-
-### Figure
-```{r}
-( graph.estimate = ggplot(fitdis1990.graph, aes(x = lsmeans.est.time, y = lsmeans.response)) +
-    geom_errorbar(width = .15, lwd=.75, aes(ymin=lsmeans.asymp.LCL, ymax=lsmeans.asymp.UCL) )  + 
-    geom_point(size=3) +
-    ylab("Seedling Count") + xlab("") +
-    theme_bw() + 
-    theme(legend.position = "none") + 
-    theme(panel.grid.major = element_blank(), 
-          axis.line = element_line(colour = "black")) + 
-    theme(axis.title.x = element_text(face = "bold", size = 12, hjust = 0.5, vjust = -0.3),
-        axis.title.y = element_text(face = "bold", size = 12, hjust = 0.5, vjust = 1.1),
-        axis.text.x = element_text(size = 10, color = "black"),
-        axis.text.y = element_text(size = 10, color = "black"),
-        axis.line = element_line(colour = "black")) + 
-    theme(strip.background = element_blank(), strip.text = element_blank()))
-```
-
-```{r}
-( graph.estimate2 = ggplot(fitdis1990.graph, aes(x = lsmeans.est.time, y = lsmeans.response)) +
-    geom_errorbar(width = .15, lwd=.75, aes(ymin=lsmeans.asymp.LCL, ymax=lsmeans.asymp.UCL) )  + 
-    geom_point(size=3) +
-    ylab("Seedling Count") + xlab("") +
-    theme_bw() + 
-    theme(legend.position = "none") + 
-    theme(panel.grid.major = element_blank(), 
-          axis.line = element_line(colour = "black")) + 
-    theme(axis.title.x = element_text(face = "bold", size = 12, hjust = 0.5, vjust = -0.3),
-        axis.title.y = element_text(face = "bold", size = 12, hjust = 0.5, vjust = 1.1),
-        axis.text.x = element_text(size = 10, color = "black", angle = 45, hjust = 0.45, vjust = .5),
-        axis.text.y = element_text(size = 10, color = "black"),
-        axis.line = element_line(colour = "black")) + 
-    theme(strip.background = element_blank(), strip.text = element_blank()))
-
-
-```
-
-
-### MODEL - not mixed
+### Statistical model with negative binomial
 ```{r}
 fitdis1990nb = glm.nb(sapling.ct ~ est.time, data = dis1990)
 ```
@@ -362,7 +241,7 @@ summary(lsmeans(fitdis1990nb, pairwise ~ est.time), type = "response", infer = T
 summary(lsmeans(fitdis1990nb, revpairwise ~ est.time), type = "response", infer = TRUE, level = .95, adjust = "bon")
 ```
 
-revpairwise
+
 ##### Data Frame
 
 ```{r}
@@ -377,28 +256,10 @@ revpairwise
 ( response.graph = data.frame(summary(lsmeans(fitdis1990nb, pairwise ~ est.time), type = "response", infer = TRUE)$lsmeans)) 
 ```
 
-### Figure Response Estimates
-```{r}
-(plot_time.est = ggplot(response.graph, aes(x = est.time, y = response)) + 
-  geom_errorbar(width = .2, lwd = .75, aes(ymin = asymp.LCL, ymax = asymp.UCL)) + 
-  geom_point(size = 3) + 
-  xlab(NULL) + 
-   geom_text(aes(label = c("", "","")), vjust = "inward", hjust = "inward", size = 4) +  
-   annotate("text", label = "During(1999-2006)", x = 2.25, y = 8.65, size = 3.5, colour = "black") +
-   annotate("text", label = "Post(2007-2015)", x = 3.25, y = 12.15, size = 3.5, colour = "black") +  
-      annotate("text", label = "Pre(1990-1998)", x = 1.25, y = 5, size = 3.5, colour = "black") + 
-   scale_y_continuous(name="Count of recruits", limits=c(0, 22), breaks = c(0, 5, 10, 15, 20)) +
-coord_flip() +
-theme_bw() + 
-  theme(axis.ticks.y = element_blank(),
-axis.text.y = element_blank()) +
-theme(legend.position = "none") +   
-  theme(plot.margin = unit(c(t = 0.1, r = 0.1, b = 0.1, l = 0.5), "cm")) +
-theme(panel.grid.major = element_blank() )  )
-```
+
 ### Manuscript Figure: Response Estimates
-```{r fig.height=3, fig.width=4, echo= FALSE}
-(plot_time.est_ppt = ggplot(response.graph, aes(x = est.time, y = response)) + 
+```{r, echo=FALSE, fig.height=3, fig.width=4}
+(fig1 = ggplot(response.graph, aes(x = est.time, y = response)) + 
   geom_errorbar(width = .2, lwd = .75, aes(ymin = asymp.LCL, ymax = asymp.UCL)) + 
   geom_point(size = 3) + 
   xlab(NULL) + 
@@ -418,7 +279,7 @@ theme(panel.grid.major = element_blank() )  )
 
 
 ```{r eval=FALSE, include=FALSE}
-ggsave("../figs/2019-07-19_unburned_estimates.jpeg", plot = plot_time.est_ppt, width = 4, height = 3, units = c("in"), dpi=600 )
+ggsave("../figs/2019-07-19_unburned_estimates.jpeg", plot = fig1, width = 4, height = 3, units = c("in"), dpi=600 )
 ```
 
 ## Extract contrast for graph
@@ -426,29 +287,10 @@ ggsave("../figs/2019-07-19_unburned_estimates.jpeg", plot = plot_time.est_ppt, w
 ( rec.contrast = data.frame(summary(lsmeans(fitdis1990nb, revpairwise ~ est.time),type = "response", infer = TRUE)$contrasts)) 
 ```
 
-### Figure Odds Ratio
-```{r}
-(plot_time.contrast = ggplot(rec.contrast, aes(x = contrast, y = ratio)) + 
-  geom_errorbar(width = .2, lwd = .75, aes(ymin = asymp.LCL, ymax = asymp.UCL)) + 
-  geom_point(size = 3) + 
-  geom_hline(aes(yintercept=1), colour="#990000", linetype="dashed", size=1)  + xlab(NULL) + 
 
-   geom_text(aes(label = c("", "","")), vjust = "inward", hjust = "inward", size = 4) +  
-   annotate("text", label = "Post / During", x = 2.25, y = 3, size = 3.5, colour = "black") +
-   annotate("text", label = "Post / Pre", x = 3.25, y = 4.5, size = 3.5, colour = "black") +  
-      annotate("text", label = "During / Pre", x = 1.25, y = 3.5, size = 3.5, colour = "black") +  
-scale_y_continuous(name="Response ratio", limits=c(0, 8), breaks = c(1, 3, 5, 7)) +
-coord_flip() +
-theme_bw() + 
-  theme(axis.ticks.y = element_blank(),
-axis.text.y = element_blank()) +
-theme(legend.position = "none") +   
-  theme(plot.margin = unit(c(t = 0.1, r = 0.1, b = 0.1, l = 0.5), "cm")) +
-theme(panel.grid.major = element_blank() )  )
-```
 ### Supplement Figure: Odds Ratio
-```{r fig.height=3, fig.width=4}
-(plot_time.contrast_ppt = ggplot(rec.contrast, aes(x = contrast, y = ratio)) + 
+```{r, echo=FALSE, fig.height=3, fig.width=4}
+(fig2 = ggplot(rec.contrast, aes(x = contrast, y = ratio)) + 
   geom_errorbar(width = .2, lwd = .75, aes(ymin = asymp.LCL, ymax = asymp.UCL)) + 
   geom_point(size = 3) + 
   geom_hline(aes(yintercept=1), colour="#990000", linetype="dashed", size=1)  + xlab(NULL) + 
@@ -469,11 +311,11 @@ theme(panel.grid.major = element_blank() )  )
 
 
 ```{r eval=FALSE, include=FALSE}
-ggsave("../figs/2019-07-19_unburned_odds_supplement.jpeg", plot = plot_time.contrast_ppt, width = 4, height = 3, units = c("in"), dpi=600 )
+ggsave("../figs/2019-07-19_unburned_odds_supplement.jpeg", plot = fig2, width = 4, height = 3, units = c("in"), dpi=600 )
 ```
 
 ```{r fig.height=3, fig.width=6}
-(grid_time1 = cowplot::plot_grid(plot_time.est, plot_time.contrast , labels = c("A", "B"), ncol = 2))
+(grid1 = cowplot::plot_grid(fig1, fig2, labels = c("A", "B"), ncol = 2))
 ```
 
 
