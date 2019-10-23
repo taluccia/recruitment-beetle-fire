@@ -25,14 +25,6 @@ The groupings created plots with repeated measures. Plots were replicates. Becau
 # Packages
 
 The following Packages are required for the below analyses:
-library(GGally)
-
-library(car)
-library(gmodels)
-library(grid)
-library(gridExtra)
-library(gtable)
-library(magick)
 
 ```{r, message=FALSE, warning=FALSE}
 library(dplyr)
@@ -61,24 +53,24 @@ summary(whorl)
 
 Histogram of estimated year of establishment based on branch whorl
 
-```{r, echo=false, fig.height=3, fig.width=3}
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
 qplot(x = whorl$est.year, data = whorl, geom = "histogram")
 ```
 
 The above histogram for establishment year are left skewed.
 
 
-```{r, echo=FALSE, fig.height=3, fig.width=3}
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
 qplot(x = whorl$whorl.leader, data = whorl, geom = "histogram")
 ```
 
 The above histogram is right skewed for saplings age. This is just the reverse of the previous histogram.
 
-```{r, echo=FALSE, fig.height=3, fig.width=3}
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
 qplot(x = whorl$est.f.year, data = whorl, geom = "histogram")
 ```
 
-```{r, echo=FALSE, fig.height=3, fig.width=3}
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
 qplot(x = whorl$false.whorls, data = whorl, geom = "histogram")
 ```
 
@@ -92,15 +84,12 @@ Here we will organize our data into the plot level and then have sapling establi
 whorl$plot.no = factor(whorl$plot.no)
 ```
 
-```{r}
-summary(whorl)
-```
 
 ## Seedling/sapling age range
 
 ```{r}
-( whorl_age = whorl %>%
-  mutate(age = (2016-est.year)) )
+whorl_age = whorl %>%
+  mutate(age = (2016-est.year)) 
 
 median(whorl_age$age)
 range(whorl_age$age)
@@ -109,23 +98,23 @@ range(whorl_age$DBH)
 ```
 
 ```{r}
-( sumplot = whorl_age %>% 
+sumplot = whorl_age %>% 
   group_by(plot.no) %>%
-  summarise(n = n()))
+  summarise(n = n())
 
 median(sumplot$n)
 range(sumplot$n)
-24.5*100
-
 ```
 
 Reorganize the data to the plot level with the number of saplings per establishment year.
 
 ```{r}
-( plot.level = whorl %>% 
+plot.level = whorl %>% 
   group_by(plot.no, est.year) %>%
   summarise(n = n()) %>%
-  spread(est.year, n, fill = 0) )
+  spread(est.year, n, fill = 0) 
+
+head(plot.level)
 ```
 
 Rename the columns.
@@ -141,42 +130,31 @@ We will also add some condensed categories for establishment as pre-outbreak (be
 
 # Statistical Analysis
 
-## Mixed Model with pre/during/post groupings with negative binomial
-Pre 1990-1998
-During 1999-2006
-Post 2007-2015
+Group and select the data needed for the analysis
 
-Select the data needed.
+* Pre 1990-1998
+* During 1999-2006
+* Post 2007-2015
 
 ```{r}
-( plot.level1990 = plot.level %>%
+plot.level1990 = plot.level %>%
     mutate(pre1990 = y1990 + y1991 + y1992 + y1993 + y1994 + y1995 + y1996 + y1997 + y1998) %>%
     mutate(during1999 = y1999 + y2000 + y2001 + y2002 + y2003 + y2004 + y2005 + y2006) %>%
-    mutate(post2007 =  y2007 + y2008 + y2009 + y2010 + y2011 + y2012 + y2013 + y2014 + y2015) )
+    mutate(post2007 =  y2007 + y2008 + y2009 + y2010 + y2011 + y2012 + y2013 + y2014 + y2015) 
+
+head(plot.level1990)
 ```
 
-## Create Pre/During/Post Data Set 
 
-Pre3 1990-1998 and earlier. During includes 1999 thru 2006. Post includes 2007-2015
 
 ```{r}
-( dis1990 = plot.level1990 %>%
-    dplyr::select(plot.no, pre1990:post2007) )
+dis1990 = plot.level1990 %>%
+    dplyr::select(plot.no, pre1990:post2007) %>%
+    tidyr::gather(est.time, sapling.ct, pre1990:post2007) %>%
+    mutate(transunique = paste(plot.no, est.time, sep = ".") )
+
+head(dis1990)
 ```
-
-Next we reorganize the data set with 2 groupings, This should double our sample size from n=20 to n=60
-
-```{r}
-( dis1990 = dis1990 %>%
-    tidyr::gather(est.time, sapling.ct, pre1990:post2007) )
-```
-
-Here we add a column and generate a unique identifier for each group in each plot.
-
-```{r}
-( dis1990 = mutate(dis1990, transunique = paste(plot.no, est.time, sep = ".") ) )
-```
-
 
 ```{r}
 dis1990$est.time = factor(dis1990$est.time, levels = c("pre1990", "during1999", "post2007"),
@@ -184,8 +162,8 @@ dis1990$est.time = factor(dis1990$est.time, levels = c("pre1990", "during1999", 
 head(dis1990)
 ```
 
+## Statistical model with negative binomial
 
-### Statistical model with negative binomial
 ```{r}
 fitdis1990nb = glm.nb(sapling.ct ~ est.time, data = dis1990)
 ```
@@ -225,13 +203,11 @@ testOverdispersion(simulationOutput1990nb)
 summary(fitdis1990nb)
 ```
 
-
 ### Estimates
+
 ```{r}
 lsmeans(fitdis1990nb, pairwise ~ est.time, type = "response", infer = TRUE, level = .95, adjust = 'bon')
 ```
-
-
 
 ```{r}
 summary(lsmeans(fitdis1990nb, pairwise ~ est.time), type = "response", infer = TRUE, level = .95, adjust = "bon")
@@ -241,72 +217,75 @@ summary(lsmeans(fitdis1990nb, pairwise ~ est.time), type = "response", infer = T
 summary(lsmeans(fitdis1990nb, revpairwise ~ est.time), type = "response", infer = TRUE, level = .95, adjust = "bon")
 ```
 
-
-##### Data Frame
+#### Data Frame
 
 ```{r}
 ( fitdis1990nb.graph = data.frame(summary(lsmeans(fitdis1990nb, pairwise ~ est.time, type = "response", infer = TRUE))) )
 ```
 
-
-
-## Extract Estimates for Graph
-
 ```{r}
 ( response.graph = data.frame(summary(lsmeans(fitdis1990nb, pairwise ~ est.time), type = "response", infer = TRUE)$lsmeans)) 
 ```
 
+## Figures
+
+Set theme
+
+```{r}
+my_theme = theme_bw() + 
+    theme(axis.ticks.y = element_blank(),
+        axis.text.y = element_blank()) +
+    theme(legend.position = "none") +   
+    theme(plot.margin = unit(c(t = 0.1, r = 0.1, b = 0.1, l = 0.5), "cm")) +
+    theme(panel.grid.major = element_blank() ) 
+```
 
 ### Manuscript Figure: Response Estimates
+
 ```{r, echo=FALSE, fig.height=3, fig.width=4}
-(fig1 = ggplot(response.graph, aes(x = est.time, y = response)) + 
+fig1 = ggplot(response.graph, aes(x = est.time, y = response)) + 
   geom_errorbar(width = .2, lwd = .75, aes(ymin = asymp.LCL, ymax = asymp.UCL)) + 
   geom_point(size = 3) + 
   xlab(NULL) + 
    geom_text(aes(label = c("", "","")), vjust = "inward", hjust = "inward", size = 4) +  
-   annotate("text", label = "During(1999-2006)", x = 2.25, y = 8.65, size = 3.5, colour = "black") +
-   annotate("text", label = "Post(2007-2015)", x = 3.25, y = 12.15, size = 3.5, colour = "black") +  
+      annotate("text", label = "During(1999-2006)", x = 2.25, y = 8.65, size = 3.5, colour = "black") +
+      annotate("text", label = "Post(2007-2015)", x = 3.25, y = 12.15, size = 3.5, colour = "black") +  
       annotate("text", label = "Pre(1990-1998)", x = 1.25, y = 5, size = 3.5, colour = "black") + 
    scale_y_continuous(name="Count of recruits", limits=c(0, 22), breaks = c(0, 5, 10, 15, 20)) +
-coord_flip() +
-theme_bw() + 
-  theme(axis.ticks.y = element_blank(),
-axis.text.y = element_blank()) +
-theme(legend.position = "none") +   
-  theme(plot.margin = unit(c(t = 0.1, r = 0.1, b = 0.1, l = 0.5), "cm")) +
-theme(panel.grid.major = element_blank() )  )
+  coord_flip() +
+  my_theme 
+
+fig1
 ```
 
+Save the manuscript figure
 
 ```{r eval=FALSE, include=FALSE}
 ggsave("../figs/2019-07-19_unburned_estimates.jpeg", plot = fig1, width = 4, height = 3, units = c("in"), dpi=600 )
 ```
 
-## Extract contrast for graph
+Extract contrast for graph
+
 ```{r}
 ( rec.contrast = data.frame(summary(lsmeans(fitdis1990nb, revpairwise ~ est.time),type = "response", infer = TRUE)$contrasts)) 
 ```
 
-
 ### Supplement Figure: Odds Ratio
+
 ```{r, echo=FALSE, fig.height=3, fig.width=4}
-(fig2 = ggplot(rec.contrast, aes(x = contrast, y = ratio)) + 
+fig2 = ggplot(rec.contrast, aes(x = contrast, y = ratio)) + 
   geom_errorbar(width = .2, lwd = .75, aes(ymin = asymp.LCL, ymax = asymp.UCL)) + 
   geom_point(size = 3) + 
   geom_hline(aes(yintercept=1), colour="#990000", linetype="dashed", size=1)  + xlab(NULL) + 
-
    geom_text(aes(label = c("", "","")), vjust = "inward", hjust = "inward", size = 4) +  
-   annotate("text", label = "Post / During", x = 2.25, y = 3, size = 3.5, colour = "black") +
-   annotate("text", label = "Post / Pre", x = 3.25, y = 4.5, size = 3.5, colour = "black") +  
+      annotate("text", label = "Post / During", x = 2.25, y = 3, size = 3.5, colour = "black") +
+      annotate("text", label = "Post / Pre", x = 3.25, y = 4.5, size = 3.5, colour = "black") +  
       annotate("text", label = "During / Pre", x = 1.25, y = 3.5, size = 3.5, colour = "black") +  
-scale_y_continuous(name="Response ratio", limits=c(0, 8), breaks = c(1, 3, 5, 7)) +
-coord_flip() +
-theme_bw() + 
-  theme(axis.ticks.y = element_blank(),
-axis.text.y = element_blank()) +
-theme(legend.position = "none") +   
-  theme(plot.margin = unit(c(t = 0.1, r = 0.1, b = 0.1, l = 0.5), "cm")) +
-theme(panel.grid.major = element_blank() )  )
+  scale_y_continuous(name="Response ratio", limits=c(0, 8), breaks = c(1, 3, 5, 7)) +
+  coord_flip() +
+  my_theme
+
+fig2
 ```
 
 
@@ -322,4 +301,3 @@ ggsave("../figs/2019-07-19_unburned_odds_supplement.jpeg", plot = fig2, width = 
 ```{r eval=FALSE, include=FALSE}
 ggsave("../figs/2019-03-18_timing-unburned.jpeg", plot = grid_time1, width = 6, height = 3, units = c("in"), dpi=600 )
 ```
-** THE END **
